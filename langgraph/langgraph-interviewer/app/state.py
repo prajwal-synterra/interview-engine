@@ -7,6 +7,8 @@ class InterviewState(TypedDict):
     answer:          str    # The candidate's typed answer
     score:           int    # Score 0-10 from Gemini evaluation
     feedback:        str    # Feedback string from Gemini
+    strengths:       str    # Strengths from candidate's answer
+    weaknesses:      str    # Weaknesses from candidate's answer
     difficulty:      str    # "easy" | "medium" | "hard"
     question_number: int    # How many questions completed so far (0 = not started)
 

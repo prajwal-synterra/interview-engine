@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangGraph + Gemini Live | Voice Interview Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #07090e;
+      --bg-card: rgba(16, 22, 36, 0.7);
+      --bg-card-hover: rgba(22, 30, 48, 0.85);
+      --border-card: rgba(255, 255, 255, 0.08);
+      --border-card-bright: rgba(99, 102, 241, 0.3);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --accent-indigo: #6366f1;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+
+      --glow-indigo: rgba(99, 102, 241, 0.25);
+      --glow-cyan: rgba(6, 182, 212, 0.25);
+      --glow-emerald: rgba(16, 185, 129, 0.25);
+
+      --font-display: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 80%, rgba(6, 182, 212, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.04) 0%, transparent 60%);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border-card);
+      backdrop-filter: blur(12px);
+      background: rgba(7, 9, 14, 0.8);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px var(--glow-indigo);
+    }
+
+    .brand-logo svg {
+      width: 20px;
+      height: 20px;
+      fill: #fff;
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-badges {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-card);
+      color: var(--text-secondary);
+    }
+
+    .pill-badge.live-status {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+      animation: pulse-dot 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container Split */
+    .app-container {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      flex: 1;
+      height: calc(100vh - 71px);
+      overflow: hidden;
+    }
+
+    /* Left Panel: Interview Stage */
+    .panel-interview {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-card);
+      overflow: hidden;
+      background: rgba(11, 15, 25, 0.4);
+      position: relative;
+    }
+
+    /* Audio Visualizer Bar */
+    .visualizer-card {
+      padding: 1.25rem 2rem 1rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border-card);
+      background: rgba(13, 19, 33, 0.6);
+      backdrop-filter: blur(10px);
+    }
+
+    .vis-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .vis-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .speaker-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.2rem 0.65rem;
+      border-radius: 6px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+    }
+
+    .speaker-label.listening {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+
+    #waveCanvas {
+      width: 100%;
+      height: 64px;
+      border-radius: 12px;
+      background: rgba(7, 10, 18, 0.8);
+      border: 1px solid var(--border-card);
+    }
+
+    /* Transcript Stream */
+    .transcript-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      scroll-behavior: smooth;
+    }
+
+    .chat-bubble {
+      display: flex;
+      gap: 0.9rem;
+      max-width: 92%;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-bubble.assistant {
+      align-self: flex-start;
+    }
+
+    .chat-bubble.candidate {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .avatar.ai {
+      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
+      color: #fff;
+      box-shadow: 0 0 12px var(--glow-indigo);
+    }
+
+    .avatar.user {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-emerald));
+      color: #042f2e;
+    }
+
+    .bubble-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .bubble-header {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .bubble-body {
+      padding: 0.9rem 1.15rem;
+      border-radius: 14px;
+      font-size: 0.92rem;
+      line-height: 1.55;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      backdrop-filter: blur(10px);
+      word-break: break-word;
+    }
+
+    .chat-bubble.assistant .bubble-body {
+      border-top-left-radius: 4px;
+      background: rgba(20, 28, 48, 0.7);
+      border-color: rgba(99, 102, 241, 0.2);
+    }
+
+    .chat-bubble.candidate .bubble-body {
+      border-top-right-radius: 4px;
+      background: rgba(14, 42, 48, 0.5);
+      border-color: rgba(6, 182, 212, 0.3);
+      color: #e2e8f0;
+    }
+
+    /* Evaluation Card inside chat */
+    .eval-card {
+      margin-top: 0.5rem;
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      background: rgba(12, 17, 30, 0.9);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .eval-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      padding-bottom: 0.6rem;
+    }
+
+    .score-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .score-bar-mini {
+      display: flex;
+      gap: 3px;
+      height: 6px;
+      margin-top: 4px;
+    }
+
+    .score-pip {
+      flex: 1;
+      height: 100%;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .score-pip.filled {
+      background: linear-gradient(90deg, #6366f1, #06b6d4);
+    }
+
+    .eval-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .eval-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .eval-text {
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .eval-pills {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .pill-tag {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+    }
+
+    .pill-tag.strength {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: #34d399;
+    }
+
+    .pill-tag.weakness {
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.25);
+      color: #fb7185;
+    }
+
+    /* Final Report Card */
+    .report-card {
+      margin-top: 0.5rem;
+      padding: 1.25rem;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(20, 27, 47, 0.9), rgba(12, 18, 32, 0.95));
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      box-shadow: 0 8px 32px rgba(168, 85, 247, 0.15);
+      white-space: pre-wrap;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      color: #e2e8f0;
+      font-family: var(--font-body);
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      padding: 1.25rem 2rem;
+      border-top: 1px solid var(--border-card);
+      background: rgba(10, 14, 24, 0.9);
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .primary-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .btn-main {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.65rem;
+      padding: 0.75rem 1.6rem;
+      border-radius: 12px;
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      outline: none;
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, var(--accent-indigo), #4f46e5);
+      color: #fff;
+      box-shadow: 0 0 20px var(--glow-indigo);
+    }
+
+    .btn-start:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 28px rgba(99, 102, 241, 0.5);
+    }
+
+    .btn-mic {
+      background: rgba(16, 22, 38, 0.9);
+      border: 1px solid var(--border-card-bright);
+      color: #fff;
+      position: relative;
+    }
+
+    .btn-mic.recording {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: rgba(244, 63, 94, 0.5);
+      color: #fda4af;
+      box-shadow: 0 0 20px rgba(244, 63, 94, 0.3);
+      animation: record-pulse 1.5s infinite;
+    }
+
+    @keyframes record-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-card);
+      color: var(--text-secondary);
+      padding: 0.65rem 1rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .text-input {
+      flex: 1;
+      padding: 0.75rem 1.15rem;
+      border-radius: 10px;
+      background: rgba(15, 22, 38, 0.8);
+      border: 1px solid var(--border-card);
+      color: #fff;
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .text-input:focus {
+      border-color: var(--accent-indigo);
+      box-shadow: 0 0 12px var(--glow-indigo);
+    }
+
+    .btn-send {
+      background: var(--accent-cyan);
+      color: #082f49;
+      font-weight: 700;
+      padding: 0 1.25rem;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-send:hover {
+      opacity: 0.9;
+    }
+
+    /* Right Panel: Behind the Scenes */
+    .panel-engine {
+      display: flex;
+      flex-direction: column;
+      background: rgba(8, 11, 20, 0.7);
+      backdrop-filter: blur(20px);
+      overflow: hidden;
+    }
+
+    .engine-header {
+      padding: 1.25rem 1.75rem;
+      border-bottom: 1px solid var(--border-card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(14, 19, 34, 0.5);
+    }
+
+    .engine-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 1.05rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #f1f5f9;
+    }
+
+    .engine-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Pipeline Node Graph */
+    .card-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 14px;
+      padding: 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pipeline-nodes {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .pipeline-node {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.55rem 0.85rem;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      transition: all 0.25s ease;
+    }
+
+    .pipeline-node.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+      box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
+    }
+
+    .pipeline-node.completed {
+      border-color: rgba(16, 185, 129, 0.25);
+      color: #6ee7b7;
+    }
+
+    .node-indicator {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .pipeline-node.active .node-indicator {
+      background: var(--accent-indigo);
+      box-shadow: 0 0 8px var(--accent-indigo);
+      animation: pulse-dot 1s infinite ease-in-out;
+    }
+
+    .pipeline-node.completed .node-indicator {
+      background: var(--accent-emerald);
+    }
+
+    /* Engine State Metrics */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.65rem;
+    }
+
+    .metric-box {
+      background: rgba(7, 10, 18, 0.6);
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .metric-val {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .diff-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      display: inline-block;
+      text-transform: uppercase;
+    }
+
+    .diff-badge.easy { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .diff-badge.medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .diff-badge.hard { background: rgba(244, 63, 94, 0.2); color: #f87171; }
+
+    /* Terminal Logs */
+    .terminal-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #05070c;
+      border: 1px solid var(--border-card);
+      border-radius: 14px;
+      overflow: hidden;
+      min-height: 250px;
+    }
+
+    .terminal-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 1rem;
+      background: rgba(15, 20, 32, 0.8);
+      border-bottom: 1px solid var(--border-card);
+    }
+
+    .term-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .term-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .term-dot.r { background: #ef4444; }
+    .term-dot.y { background: #f59e0b; }
+    .term-dot.g { background: #10b981; }
+
+    .term-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .term-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+
+    .term-btn:hover { color: #fff; }
+
+    .terminal-content {
+      flex: 1;
+      padding: 0.85rem 1rem;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      line-height: 1.45;
+    }
+
+    .log-line {
+      display: flex;
+      gap: 0.6rem;
+      word-break: break-all;
+    }
+
+    .log-time {
+      color: #475569;
+      flex-shrink: 0;
+    }
+
+    .log-tag {
+      font-weight: 700;
+      flex-shrink: 0;
+      font-size: 0.72rem;
+      padding: 0 0.35rem;
+      border-radius: 3px;
+    }
+
+    .log-tag.graph { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+    .log-tag.api { background: rgba(6, 182, 212, 0.2); color: #22d3ee; }
+    .log-tag.live { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .log-tag.eval { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .log-tag.system { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+    .log-tag.error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+
+    .log-msg {
+      color: #cbd5e1;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">Interview Engine</div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">LangGraph State Machine + Gemini Live</div>
+      </div>
+    </div>
+
+    <div class="header-badges">
+      <div class="pill-badge">
+        <span style="color: var(--accent-cyan); font-weight: 700;">MODEL</span> gemini-3.1-flash-live-preview
+      </div>
+      <div class="pill-badge">
+        <span style="color: var(--accent-indigo); font-weight: 700;">BRAIN</span> LangGraph 4-Node Cycle
+      </div>
+      <div class="pill-badge live-status" id="wsStatusBadge">
+        <span class="status-dot"></span>
+        <span id="wsStatusText">Connected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Split Layout -->
+  <main class="app-container">
+
+    <!-- LEFT PANEL: Interview Room -->
+    <section class="panel-interview">
+      
+      <!-- Visualizer & Audio Monitor -->
+      <div class="visualizer-card">
+        <div class="vis-header">
+          <div class="vis-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            Voice Stream & Waveform
+          </div>
+          <div class="speaker-label" id="speakerLabel">Ready to begin</div>
+        </div>
+        <canvas id="waveCanvas"></canvas>
+      </div>
+
+      <!-- Transcript Timeline -->
+      <div class="transcript-scroll" id="transcriptScroll">
+        <div class="chat-bubble assistant">
+          <div class="avatar ai">AI</div>
+          <div class="bubble-content">
+            <div class="bubble-header">AI Interviewer • Gemini Live</div>
+            <div class="bubble-body">
+              Welcome! When you are ready, click <strong>"Start Interview"</strong> below. I will introduce the session and ask you to introduce yourself before we proceed with Java technical questions.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls-bar">
+        <div class="primary-actions">
+          <button class="btn-main btn-start" id="startBtn" onclick="startInterview()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Interview
+          </button>
+
+          <button class="btn-main btn-mic" id="micBtn" onclick="toggleMicrophone()" disabled title="Microphone controls">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path></svg>
+            <span id="micBtnText">Record Answer</span>
+          </button>
+
+          <button class="btn-secondary" id="resetBtn" onclick="resetInterview()">
+            Reset
+          </button>
+
+          <div style="margin-left: auto; font-size: 0.75rem; color: var(--text-muted);">
+            Round <span id="roundCounterText" style="color: #fff; font-weight: 700;">0</span> of 5
+          </div>
+        </div>
+
+        <div class="input-row">
+          <input type="text" id="answerInput" class="text-input" placeholder="Type or review speech transcription here..." onkeydown="if(event.key==='Enter') sendTypedAnswer()" />
+          <button class="btn-send" onclick="sendTypedAnswer()">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Behind the Scenes -->
+    <aside class="panel-engine">
+      <div class="engine-header">
+        <div class="engine-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Behind the Scenes
+        </div>
+        <span class="pill-badge" id="graphStateBadge" style="color: var(--accent-indigo);">STATE INSPECTOR</span>
+      </div>
+
+      <div class="engine-body">
+
+        <!-- LangGraph Active Pipeline -->
+        <div class="card-section">
+          <div class="section-title">
+            <span>LangGraph Pipeline State</span>
+            <span id="activeNodeName" style="color: var(--accent-indigo); font-family: var(--font-mono);">IDLE</span>
+          </div>
+
+          <div class="pipeline-nodes">
+            <div class="pipeline-node" id="node-start">
+              <span>START</span>
+              <span class="node-indicator"></span>
+            </div>
+            <div class="pipeline-node" id="node-generate_question">
+              <span>Node: generate_question</span>
+              <span class="node-indicator"></span>
+            </div>
+            <div class="pipeline-node" id="node-get_answer">
+              <span>Node: get_answer (Voice / WS)</span>
+              <span class="node-indicator"></span>
+            </div>
+            <div class="pipeline-node" id="node-evaluate_answer">
+              <span>Node: evaluate_answer (Pydantic)</span>
+              <span class="node-indicator"></span>
+            </div>
+            <div class="pipeline-node" id="node-final_report">
+              <span>Node: final_report</span>
+              <span class="node-indicator"></span>
+            </div>
+            <div class="pipeline-node" id="node-end">
+              <span>END</span>
+              <span class="node-indicator"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Metrics -->
+        <div class="card-section">
+          <div class="section-title">
+            <span>Adaptive Engine Telemetry</span>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-box">
+              <span class="metric-label">Difficulty</span>
+              <div class="metric-val">
+                <span class="diff-badge easy" id="metricDiff">EASY</span>
+              </div>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Latest Score</span>
+              <div class="metric-val" id="metricScore">0/10</div>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Average</span>
+              <div class="metric-val" id="metricAvg">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Logs -->
+        <div class="terminal-section">
+          <div class="terminal-bar">
+            <div class="term-dots">
+              <span class="term-dot r"></span>
+              <span class="term-dot y"></span>
+              <span class="term-dot g"></span>
+            </div>
+            <span style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted);">ENGINE LOGS</span>
+            <div class="term-actions">
+              <button class="term-btn" onclick="clearLogs()">Clear</button>
+            </div>
+          </div>
+          <div class="terminal-content" id="terminalLogs"></div>
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+  <script>
+    // ── WebSocket & Audio Configuration ──────────────────────────────────────
+    let ws = null;
+    let audioCtx = null;
+    let analyser = null;
+    let nextPlayTime = 0;
+    let isRecording = false;
+    let mediaStream = null;
+    let audioRecorderNode = null;
+    let recordedPcmChunks = [];
+    let speechRecognition = null;
+    let activeNode = "start";
+
+    // Initialize Web Audio Context
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8;
+        analyser.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // ── Canvas Waveform Visualizer ───────────────────────────────────────────
+    const canvas = document.getElementById("waveCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth - 64;
+      canvas.height = 64;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    function drawWaveform() {
+      requestAnimationFrame(drawWaveform);
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (!analyser) {
+        // Idle gentle wave
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(99, 102, 241, 0.25)";
+        ctx.lineWidth = 2;
+        const time = Date.now() * 0.003;
+        for (let x = 0; x < w; x++) {
+          const y = h / 2 + Math.sin(x * 0.03 + time) * 3;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        return;
+      }
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteTimeDomainData(dataArray);
+
+      ctx.lineWidth = 2.5;
+      const gradient = ctx.createLinearGradient(0, 0, w, 0);
+      gradient.addColorStop(0, "#6366f1");
+      gradient.addColorStop(0.5, "#06b6d4");
+      gradient.addColorStop(1, "#10b981");
+      ctx.strokeStyle = gradient;
+
+      ctx.beginPath();
+      const sliceWidth = w / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * h) / 2;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+
+        x += sliceWidth;
+      }
+      ctx.lineTo(w, h / 2);
+      ctx.stroke();
+    }
+    drawWaveform();
+
+    // ── Audio Streaming Playback (24kHz 16-bit PCM from Gemini Live) ─────────
+    function playPcmAudioChunk(b64Data) {
+      try {
+        const ctx = getAudioContext();
+        const binaryStr = atob(b64Data);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+
+        const int16Array = new Int16Array(bytes.buffer);
+        const float32Array = new Float32Array(int16Array.length);
+        for (let i = 0; i < int16Array.length; i++) {
+          float32Array[i] = int16Array[i] / 32768.0;
+        }
+
+        const audioBuffer = ctx.createBuffer(1, float32Array.length, 24000);
+        audioBuffer.getChannelData(0).set(float32Array);
+
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(analyser);
+
+        const now = ctx.currentTime;
+        if (nextPlayTime < now) {
+          nextPlayTime = now + 0.04;
+        }
+        source.start(nextPlayTime);
+        nextPlayTime += audioBuffer.duration;
+      } catch (err) {
+        console.error("Audio playback error:", err);
+      }
+    }
+
+    // ── WebSocket Connection Setup ───────────────────────────────────────────
+    function initWebSocket() {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const url = `${proto}//${window.location.host}/ws`;
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        document.getElementById("wsStatusBadge").className = "pill-badge live-status";
+        document.getElementById("wsStatusText").innerText = "Connected";
+        appendLog("system", "Connected to Interview WebSocket server.");
+      };
+
+      ws.onclose = () => {
+        document.getElementById("wsStatusBadge").className = "pill-badge";
+        document.getElementById("wsStatusText").innerText = "Disconnected";
+        appendLog("error", "WebSocket disconnected. Reconnecting in 3s...");
+        setTimeout(initWebSocket, 3000);
+      };
+
+      ws.onerror = (err) => {
+        console.error("WS Error:", err);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleServerMessage(msg);
+        } catch (e) {
+          console.error("Error parsing WS message:", e);
+        }
+      };
+    }
+
+    // ── Message Dispatcher ───────────────────────────────────────────────────
+    function handleServerMessage(msg) {
+      switch (msg.type) {
+        case "log":
+          appendLog(msg.category, msg.message);
+          break;
+
+        case "audio":
+          playPcmAudioChunk(msg.data);
+          break;
+
+        case "audio_end":
+          // Spoken turn ended
+          break;
+
+        case "status":
+          updateStatus(msg.status, msg.details);
+          break;
+
+        case "transcript":
+          appendTranscript(msg.role, msg.text);
+          break;
+
+        case "question":
+          setActivePipelineNode("node-get_answer");
+          document.getElementById("micBtn").disabled = false;
+          break;
+
+        case "evaluation":
+          appendEvaluationCard(msg);
+          break;
+
+        case "final_report":
+          appendFinalReportCard(msg.report);
+          setActivePipelineNode("node-final_report");
+          break;
+
+        case "state":
+          updateEngineState(msg.state);
+          break;
+      }
+    }
+
+    // ── UI Updates ───────────────────────────────────────────────────────────
+    function updateStatus(status, details) {
+      const label = document.getElementById("speakerLabel");
+      const micBtn = document.getElementById("micBtn");
+
+      if (status === "speaking") {
+        label.innerText = "Interviewer Speaking...";
+        label.className = "speaker-label";
+        setActivePipelineNode("node-generate_question");
+      } else if (status === "listening") {
+        label.innerText = details || "Listening for your response...";
+        label.className = "speaker-label listening";
+        setActivePipelineNode("node-get_answer");
+        micBtn.disabled = false;
+      } else if (status === "evaluating") {
+        label.innerText = "LangGraph Evaluating...";
+        label.className = "speaker-label";
+        setActivePipelineNode("node-evaluate_answer");
+      } else if (status === "generating") {
+        label.innerText = details || "Generating Next Question...";
+        label.className = "speaker-label";
+        setActivePipelineNode("node-generate_question");
+      } else if (status === "completed") {
+        label.innerText = "Interview Completed";
+        label.className = "speaker-label";
+        setActivePipelineNode("node-end");
+        document.getElementById("startBtn").disabled = false;
+        document.getElementById("startBtn").innerText = "Restart Interview";
+      }
+    }
+
+    function appendTranscript(role, text) {
+      const container = document.getElementById("transcriptScroll");
+      const bubble = document.createElement("div");
+      bubble.className = `chat-bubble ${role === "interviewer" ? "assistant" : "candidate"}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = `avatar ${role === "interviewer" ? "ai" : "user"}`;
+      avatar.innerText = role === "interviewer" ? "AI" : "YOU";
+
+      const content = document.createElement("div");
+      content.className = "bubble-content";
+
+      const header = document.createElement("div");
+      header.className = "bubble-header";
+      header.innerText = role === "interviewer" ? "AI Interviewer • Gemini Live" : "Candidate";
+
+      const body = document.createElement("div");
+      body.className = "bubble-body";
+      body.innerText = text;
+
+      content.appendChild(header);
+      content.appendChild(body);
+      bubble.appendChild(avatar);
+      bubble.appendChild(content);
+
+      container.appendChild(bubble);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendEvaluationCard(evalData) {
+      const container = document.getElementById("transcriptScroll");
+      const card = document.createElement("div");
+      card.className = "eval-card";
+
+      // Score bar pips
+      let pipsHtml = "";
+      for (let i = 1; i <= 10; i++) {
+        pipsHtml += `<div class="score-pip ${i <= evalData.score ? 'filled' : ''}"></div>`;
+      }
+
+      card.innerHTML = `
+        <div class="eval-header">
+          <div>
+            <span class="eval-label">LangGraph Structured Evaluation</span>
+            <div style="font-size: 0.85rem; font-weight: 600; color: #fff;">Round ${evalData.round} Assessment</div>
+          </div>
+          <div style="text-align: right;">
+            <div class="score-badge">${evalData.score} <span style="font-size: 0.8rem; color: var(--text-muted);">/ 10</span></div>
+            <div class="score-bar-mini" style="width: 80px;">${pipsHtml}</div>
+          </div>
+        </div>
+        ${evalData.strengths ? `
+          <div class="eval-section">
+            <span class="eval-label" style="color: #34d399;">Strengths</span>
+            <div class="eval-text">${evalData.strengths}</div>
+          </div>` : ''}
+        ${evalData.weaknesses ? `
+          <div class="eval-section">
+            <span class="eval-label" style="color: #fb7185;">Areas to Improve</span>
+            <div class="eval-text">${evalData.weaknesses}</div>
+          </div>` : ''}
+        <div class="eval-section">
+          <span class="eval-label">Coaching Feedback</span>
+          <div class="eval-text">${evalData.feedback}</div>
+        </div>
+      `;
+
+      container.appendChild(card);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendFinalReportCard(reportText) {
+      const container = document.getElementById("transcriptScroll");
+      const card = document.createElement("div");
+      card.className = "report-card";
+      card.innerHTML = `
+        <div style="font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: #a855f7; margin-bottom: 0.5rem;">
+          FINAL INTERVIEW REPORT
+        </div>
+        ${reportText}
+      `;
+      container.appendChild(card);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function updateEngineState(state) {
+      if (!state) return;
+
+      // Update counters
+      const qNum = state.question_number || 0;
+      document.getElementById("roundCounterText").innerText = qNum;
+
+      // Update Difficulty
+      const diff = (state.difficulty || "easy").toLowerCase();
+      const diffEl = document.getElementById("metricDiff");
+      diffEl.innerText = diff.toUpperCase();
+      diffEl.className = `diff-badge ${diff}`;
+
+      // Update Scores
+      if (state.scores && state.scores.length > 0) {
+        const latest = state.scores[state.scores.length - 1];
+        document.getElementById("metricScore").innerText = `${latest}/10`;
+
+        const sum = state.scores.reduce((a, b) => a + b, 0);
+        const avg = (sum / state.scores.length).toFixed(1);
+        document.getElementById("metricAvg").innerText = `${avg}/10`;
+      }
+    }
+
+    function setActivePipelineNode(nodeId) {
+      const nodeIds = [
+        "node-start",
+        "node-generate_question",
+        "node-get_answer",
+        "node-evaluate_answer",
+        "node-final_report",
+        "node-end"
+      ];
+
+      nodeIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.remove("active");
+          if (nodeIds.indexOf(id) < nodeIds.indexOf(nodeId)) {
+            el.classList.add("completed");
+          }
+        }
+      });
+
+      const activeEl = document.getElementById(nodeId);
+      if (activeEl) {
+        activeEl.classList.add("active");
+        document.getElementById("activeNodeName").innerText = nodeId.replace("node-", "").toUpperCase();
+      }
+    }
+
+    function appendLog(category, message) {
+      const logs = document.getElementById("terminalLogs");
+      const line = document.createElement("div");
+      line.className = "log-line";
+
+      const time = new Date().toLocaleTimeString();
+      line.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-tag ${category}">${category.toUpperCase()}</span>
+        <span class="log-msg">${escapeHtml(message)}</span>
+      `;
+
+      logs.appendChild(line);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById("terminalLogs").innerHTML = "";
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // ── User Actions & Voice Recording ───────────────────────────────────────
+    function startInterview() {
+      getAudioContext();
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("startBtn").innerText = "Interview in Progress";
+      setActivePipelineNode("node-start");
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "start_interview" }));
+      }
+    }
+
+    function resetInterview() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "reset" }));
+      }
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("startBtn").innerText = "Start Interview";
+      document.getElementById("roundCounterText").innerText = "0";
+      document.getElementById("metricScore").innerText = "0/10";
+      document.getElementById("metricAvg").innerText = "--";
+      setActivePipelineNode("node-start");
+      appendLog("system", "Session reset.");
+    }
+
+    async function toggleMicrophone() {
+      if (!isRecording) {
+        await startRecording();
+      } else {
+        await stopRecording();
+      }
+    }
+
+    async function startRecording() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true
+          }
+        });
+        mediaStream = stream;
+        const ctx = getAudioContext();
+        const source = ctx.createMediaStreamSource(stream);
+
+        // Connect mic stream to visualizer analyser
+        source.connect(analyser);
+
+        recordedPcmChunks = [];
+        // Use ScriptProcessor for capturing raw 16kHz PCM samples
+        audioRecorderNode = ctx.createScriptProcessor(4096, 1, 1);
+        source.connect(audioRecorderNode);
+        audioRecorderNode.connect(ctx.destination);
+
+        audioRecorderNode.onaudioprocess = (e) => {
+          if (!isRecording) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          // Downsample or convert Float32 to Int16 PCM
+          const pcm16 = new Int16Array(inputData.length);
+          for (let i = 0; i < inputData.length; i++) {
+            const s = Math.max(-1, Math.min(1, inputData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          recordedPcmChunks.push(pcm16);
+        };
+
+        // Web Speech API for instant live feedback if available
+        initSpeechRecognition();
+
+        isRecording = true;
+        document.getElementById("micBtn").classList.add("recording");
+        document.getElementById("micBtnText").innerText = "Finish & Send";
+        appendLog("live", "Microphone listening (16kHz PCM stream)...");
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        appendLog("error", `Microphone error: ${err.message}. You can type your answer.`);
+      }
+    }
+
+    async function stopRecording() {
+      if (!isRecording) return;
+      isRecording = false;
+
+      document.getElementById("micBtn").classList.remove("recording");
+      document.getElementById("micBtnText").innerText = "Record Answer";
+
+      if (audioRecorderNode) {
+        audioRecorderNode.disconnect();
+        audioRecorderNode = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+
+      if (speechRecognition) {
+        try { speechRecognition.stop(); } catch (e) {}
+      }
+
+      // Combine Int16 PCM chunks into a single byte array
+      let totalLength = 0;
+      for (const chunk of recordedPcmChunks) {
+        totalLength += chunk.length;
+      }
+
+      const mergedPcm = new Int16Array(totalLength);
+      let offset = 0;
+      for (const chunk of recordedPcmChunks) {
+        mergedPcm.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const pcmBytes = new Uint8Array(mergedPcm.buffer);
+      let binary = '';
+      const len = pcmBytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(pcmBytes[i]);
+      }
+      const b64Pcm = btoa(binary);
+
+      const clientTranscript = document.getElementById("answerInput").value.trim();
+      document.getElementById("answerInput").value = "";
+
+      appendLog("live", `Captured speech audio: ${totalLength} samples. Dispatching...`);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "candidate_audio",
+          data: b64Pcm,
+          transcript: clientTranscript
+        }));
+      }
+    }
+
+    function initSpeechRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) return;
+
+      speechRecognition = new SpeechRec();
+      speechRecognition.continuous = true;
+      speechRecognition.interimResults = true;
+      speechRecognition.lang = 'en-US';
+
+      speechRecognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        document.getElementById("answerInput").value = transcript;
+      };
+
+      try {
+        speechRecognition.start();
+      } catch (e) {}
+    }
+
+    function sendTypedAnswer() {
+      const input = document.getElementById("answerInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = "";
+      appendLog("system", `Submitted typed answer: "${text}"`);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "candidate_text",
+          text: text
+        }));
+      }
+    }
+
+    // Initialize on page load
+    window.addEventListener("DOMContentLoaded", () => {
+      initWebSocket();
+    });
+  </script>
+</body>
+</html>

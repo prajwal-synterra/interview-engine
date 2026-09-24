@@ -26,6 +26,8 @@ initial_state: InterviewState = {
     "answer":          "",
     "score":           0,
     "feedback":        "",
+    "strengths":       "",
+    "weaknesses":      "",
     "difficulty":      "easy",
     "question_number": 0,
     "questions":       [],

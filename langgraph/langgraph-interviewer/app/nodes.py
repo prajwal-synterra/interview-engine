@@ -10,7 +10,7 @@ Nodes never return the full state; only the fields they changed.
 
 from pydantic import BaseModel, field_validator
 from app.state import InterviewState
-from app.llm import get_llm
+from app.llm import get_llm, invoke_llm_with_fallback
 
 # ── Shared display helpers ─────────────────────────────────────────────────
 DIV  = "=" * 62
@@ -22,7 +22,12 @@ def _section(title: str):
 def _row(label: str, value):
     print(f"  {label:<14}: {value}")
 
-llm = get_llm()
+def _invoke(prompt: str):
+    return invoke_llm_with_fallback(lambda k: get_llm(api_key=k).invoke(prompt))
+
+def _invoke_structured(schema, prompt: str):
+    return invoke_llm_with_fallback(lambda k: get_llm(api_key=k).with_structured_output(schema).invoke(prompt))
+
 
 # ── Pydantic schema for structured evaluation output ───────────────────────
 # llm.with_structured_output(Evaluation) forces Gemini to return this exact
@@ -69,7 +74,7 @@ def generate_question(state: InterviewState) -> dict:
     _row("API call", "llm.invoke(Java question prompt)")
     print(f"  Waiting for Gemini...")
 
-    response = llm.invoke(
+    response = _invoke(
         f"Generate one {difficulty} Java interview question. "
         f"Return ONLY the question text, no explanation, no numbering."
     )
@@ -83,11 +88,15 @@ def generate_question(state: InterviewState) -> dict:
         "answer":          "",
         "score":           0,
         "feedback":        "",
+        "strengths":       "",
+        "weaknesses":      "",
     }
 
 
 # ── Node 2: Get User Answer (Module 5) ────────────────────────────────────
 def get_answer(state: InterviewState) -> dict:
+    if state.get("answer"):
+        return {"answer": state["answer"]}
     _section(f"QUESTION {state['question_number']}  |  Difficulty: {state['difficulty'].upper()}")
     print(f"  {state['question']}")
     print(f"\n{LINE}")
@@ -103,7 +112,6 @@ def evaluate_answer(state: InterviewState) -> dict:
     _row("Input",    "question + answer -> Gemini")
     print(f"  Evaluating... please wait.")
 
-    structured_llm = llm.with_structured_output(Evaluation)
     prompt = f"""
 You are a strict but fair Java technical interviewer.
 
@@ -115,7 +123,7 @@ Candidate's answer:
 
 Evaluate the answer objectively. Score must be between 0 and 10.
 """
-    result: Evaluation = structured_llm.invoke(prompt)
+    result: Evaluation = _invoke_structured(Evaluation, prompt)
 
     questions = list(state.get("questions", []))
     answers   = list(state.get("answers",   []))
@@ -146,12 +154,14 @@ Evaluate the answer objectively. Score must be between 0 and 10.
     _row("next difficulty", next_diff.upper() + (" (up)" if next_diff != state['difficulty'] and LEVELS.index(next_diff) > LEVELS.index(state['difficulty']) else " (down)" if next_diff != state['difficulty'] else " (same)"))
 
     return {
-        "score":     result.score,
-        "feedback":  result.feedback,
-        "questions": questions,
-        "answers":   answers,
-        "scores":    scores,
-        "feedbacks": feedbacks,
+        "score":      result.score,
+        "feedback":   result.feedback,
+        "strengths":  result.strengths,
+        "weaknesses": result.weaknesses,
+        "questions":  questions,
+        "answers":    answers,
+        "scores":     scores,
+        "feedbacks":  feedbacks,
     }
 
 
@@ -190,5 +200,5 @@ Write a concise INTERVIEW REPORT with these four sections:
 3. Key Weaknesses
 4. Recommended Topics to Study
 """
-    response = llm.invoke(prompt)
+    response = _invoke(prompt)
     return {"final_report": response.content}
