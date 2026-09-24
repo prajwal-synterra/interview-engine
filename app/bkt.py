@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from typing import Dict, Literal, Tuple
 
 
-Verdict = Literal["correct","incorrect"]
-
+Verdict = Literal["correct", "partial", "incorrect"]
 @dataclass(frozen=True)
 class DepthParams:
     guess:float # P(G): Probability unknowledgeable candidate answers correctly
@@ -34,13 +33,9 @@ def update_mastery(
     Executes the two-step Bayesian Knowledge Tracing update:
       Step 1: Bayesian Posterior Update: P(L_t | obs)
       Step 2: Latent Learning Transition: P(L_{t+1})
-    Args:
-        prior: Previous mastery probability P(L_{t-1})
-        verdict: 'correct' or 'incorrect'
-        depth_level: 'L1', 'L2', 'L3', or 'L4'
-    Returns:
-        (posterior_belief, next_mastery) both rounded to 4 decimals
-"""
+
+    Supports ternary observations: 'correct', 'partial', and 'incorrect'.
+    """
     if depth_level not in DEPTH_LEVEL_PARAMS:
         raise ValueError(f"Invalid depth level: {depth_level}. Must be one of {list(DEPTH_LEVEL_PARAMS.keys())}")
         
@@ -49,22 +44,37 @@ def update_mastery(
     p_s = params.slip
     p_t = params.learn
 
+    # Step 1: Compute Bayesian Posterior
     if verdict == "correct":
-        numrator = prior * (1.0 - p_s)
-        denomintor = numrator + ((1.0 - prior) * p_g)
+        numerator = prior * (1.0 - p_s)
+        denominator = numerator + ((1.0 - prior) * p_g)
+        posterior = numerator / denominator if denominator > 0 else prior
 
     elif verdict == "incorrect":
-        numrator = prior * p_s
-        denomintor = numrator + ((1.0 - prior) * (1.0 - p_g))
+        numerator = prior * p_s
+        denominator = numerator + ((1.0 - prior) * (1.0 - p_g))
+        posterior = numerator / denominator if denominator > 0 else prior
+
+    elif verdict == "partial":
+        # 50/50 Bayesian expectation mixture of correct and incorrect likelihoods
+        num_c = prior * (1.0 - p_s)
+        den_c = num_c + ((1.0 - prior) * p_g)
+        post_c = num_c / den_c if den_c > 0 else prior
+
+        num_i = prior * p_s
+        den_i = num_i + ((1.0 - prior) * (1.0 - p_g))
+        post_i = num_i / den_i if den_i > 0 else prior
+
+        posterior = 0.5 * post_c + 0.5 * post_i
 
     else:
         raise ValueError(f"Invalid verdict: '{verdict}'. Must be one of {list(Verdict)}")
 
-    posterior = numrator / denomintor if denomintor > 0 else prior
+    # Step 2: Latent Learning Transition
+    next_mastery = posterior + ((1.0 - posterior) * p_t)
 
-    next_mastry = posterior + ((1.0 - posterior)* p_t)
+    return round(posterior, 4), round(next_mastery, 4)
 
-    return round(posterior,4),round(next_mastry,4)
 
 if __name__ == "__main__":
     print("Testing BKT math engine...")
@@ -78,7 +88,7 @@ if __name__ == "__main__":
     print(f"Turn 2 (L2 Correct)  : Prior={m1:.4f} -> Posterior={post2:.4f} -> Next={m2:.4f} (Expected: ~0.8761)")
     assert abs(m2 - 0.8761) < 0.001, f"Turn 2 expected ~0.8761, got {m2}"
 
-    # Turn 3: L3 Incorrect (Nervous Slip / Missed Nuance)
+    # Turn 3:d L3 Incorrect (Nervous Slip / Missed Nuance)
     post3, m3 = update_mastery(m2, "incorrect", "L3")
     print(f"Turn 3 (L3 Incorrect): Prior={m2:.4f} -> Posterior={post3:.4f} -> Next={m3:.4f} (Expected: ~0.5639)")
     assert abs(m3 - 0.5639) < 0.001, f"Turn 3 expected ~0.5639, got {m3}"

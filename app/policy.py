@@ -92,15 +92,27 @@ def evaluate_policy(
             reason=f"Steep mastery surge on {depth_level} (Δ={next_mastery - prior:.4f}, Mastery={next_mastery:.4f}). Triggering Devil's Advocate trade-off probe."
         )
 
-    # 3. Check for standard Mastery Verification Exit (without surge trigger)
+        # 3. Check for Mastery Verification Exit
+    # CANDIDATES MUST REACH L3 OR L4 TO BE CERTIFIED! (Cannot verify at L1/L2)
     if next_mastery >= MASTERY_VERIFICATION_THRESHOLD:
-        return PolicyDecision(
-            action="EXIT_VERIFIED",
-            next_depth=depth_level,
-            state="VERIFIED",
-            is_devils_advocate=False,
-            reason=f"Candidate achieved mastery ({next_mastery:.4f} >= {MASTERY_VERIFICATION_THRESHOLD}). Certified verified."
-        )
+        if depth_level in ("L3", "L4"):
+            return PolicyDecision(
+                action="EXIT_VERIFIED",
+                next_depth=depth_level,
+                state="VERIFIED",
+                is_devils_advocate=False,
+                reason=f"Candidate demonstrated verified mastery ({next_mastery:.4f}) at architectural depth {depth_level}."
+            )
+        else:
+            # Force escalation to L3 to test architectural depth!
+            next_depth = "L2" if depth_level == "L1" else "L3"
+            return PolicyDecision(
+                action="ESCALATE_DEPTH",
+                next_depth=next_depth,
+                state="IN_PROGRESS",
+                is_devils_advocate=False,
+                reason=f"High foundational mastery ({next_mastery:.4f}). Escalating to {next_depth} to test architectural competency."
+            )
 
     # 4. Check for Max Attempts / Shallow Exit
     if attempts >= MAX_ATTEMPTS_PER_SKILL:
@@ -112,7 +124,7 @@ def evaluate_policy(
             reason=f"Max attempts ({MAX_ATTEMPTS_PER_SKILL}) reached without reaching verification threshold. Ceiling recorded as Shallow."
         )
 
-    # 5. Routine Turn: Escalate Depth or Re-probe
+    # 5. Routine Turn: Handle Correct, Partial, and Incorrect
     current_idx = DEPTH_HIERARCHY.index(depth_level) if depth_level in DEPTH_HIERARCHY else 0
 
     if verdict == "correct":
@@ -123,8 +135,14 @@ def evaluate_policy(
         else:
             next_depth = depth_level
             action = "CONTINUE_SAME_LEVEL"
-            reason = f"Correct answer at {depth_level} but already at max depth."
+            reason = f"Correct answer at maximum depth {depth_level}."
+    elif verdict == "partial":
+        # Keep candidate at same level for a clarifying re-probe
+        next_depth = depth_level
+        action = "CONTINUE_SAME_LEVEL"
+        reason = f"Partial credit at {depth_level}. Demonstrates core grasp; re-probing at same depth to evaluate full competency."
     else:
+        # Incorrect answer
         next_depth = depth_level
         action = "CONTINUE_SAME_LEVEL"
         reason = f"Incorrect answer at {depth_level}. Re-probing at {next_depth} with alternative question."
@@ -136,6 +154,7 @@ def evaluate_policy(
         is_devils_advocate=False,
         reason=reason
     )
+
 
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ if not api_key:
     raise RuntimeError("GEMINI_API_KEY not found in environment!")
 
 client = genai.Client(api_key=api_key)
-MODEL_NAME = "gemini-3.5-flash"
+MODEL_NAME = "gemini-3.5-flash-lite"
 
 
 def call_gemini_with_retry(prompt: str, schema, temperature: float = 0.2, max_retries: int = 3):
@@ -76,11 +76,12 @@ Cognitive Depth Level: {depth_level} ({guidance})
 
 Your task:
 1. Formulate a clear, direct interview question suited for {depth_level}.
-2. Formulate 2 to 3 'required_criteria' that must be mentioned or explained for full credit.
-3. Formulate 1 to 2 'prohibited_misconceptions' or buzzword traps that indicate lack of genuine depth.
+2. Formulate 2 concise 'required_criteria' representing the CORE mechanical understanding (focus on high-level concepts, not pedantic syntax).
+3. Formulate 1 or 2 'prohibited_misconceptions' (buzzword bluffs or false architectural claims).
 
 Return the result strictly structured as a LockedRubric.
 """
+
 
     response = call_gemini_with_retry(prompt, LockedRubric, temperature=0.4)
     rubric_data = LockedRubric.model_validate_json(response.text)
@@ -121,7 +122,7 @@ def grade_answer_with_rubric(rubric: LockedRubric, candidate_answer: str) -> Gra
     Never calculates scores or probabilities.
     """
     prompt = f"""
-You are an impartial, strict technical evaluator. You must evaluate the candidate's answer EXCLUSIVELY against the frozen rubric below.
+You are an impartial technical evaluator assessing a candidate's answer against the frozen rubric below.
 
 QUESTION:
 {rubric.question_text}
@@ -136,12 +137,14 @@ CANDIDATE ANSWER:
 "{candidate_answer}"
 
 EVALUATION RULES:
-1. If the candidate clearly articulates the required criteria without falling into prohibited misconceptions, issue verdict: 'correct'.
-2. If they miss the core mechanics, give a superficial non-answer, or repeat prohibited misconceptions, issue verdict: 'incorrect'.
-3. Do NOT soften criteria because the candidate sounds confident or polite.
+1. Issue verdict: 'correct' if the candidate clearly and accurately articulates the core required criteria without falling into prohibited misconceptions.
+2. Issue verdict: 'partial' if the candidate demonstrates genuine understanding of the primary concept, but missed a secondary nuance, or provided a solid explanation without a requested code example (with no fatal misconceptions).
+3. Issue verdict: 'incorrect' ONLY if the candidate fundamentally misses the core mechanism, makes false technical claims, repeats prohibited misconceptions, or gives a superficial non-answer.
 
-Return strictly structured as GradingResult.
+Return strictly structured as GradingResult with verdict being 'correct', 'partial', or 'incorrect'.
 """
+
+
 
     response = call_gemini_with_retry(prompt, GradingResult, temperature=0.0)
     return GradingResult.model_validate_json(response.text)

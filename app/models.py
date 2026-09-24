@@ -26,13 +26,13 @@ class LockedRubric(BaseModel):
     is_devils_advocate: bool = False
     created_at : str = Field(default_factory=lambda: datetime.now().strftime("%H:%M:%S"))
 
-class GardingResult(BaseModel):
+class GradingResult(BaseModel):
     """
     Discrete Grader Output.
     Gemini is restricted to classification against the locked rubric.
     It NEVER computes numbers or mastery scores.
     """
-    verdict: Literal["correct","incorrect"]
+    verdict: Literal["correct", "partial", "incorrect"]
     rationale:str =Field(description="Clear, concise explanation of why this answer meets or violates the rubric")
     matched_criteria: List[str] = Field(default_factory=list, description="Specific required criteria that were hit")
     violated_misconceptions: List[str] = Field(default_factory=list, description="Specific prohibited assumptions that were detected")
@@ -44,7 +44,7 @@ class BKTTelemetry(BaseModel):
 
     turn_number:int
     depth_level :str
-    verdict: Literal["correct","incorrect"]
+    verdict: Literal["correct", "partial", "incorrect"]
     prior: float
     guess_used: float
     slip_used: float
@@ -54,21 +54,14 @@ class BKTTelemetry(BaseModel):
     delta: float
 
 class TurnResponse(BaseModel):
-    """
-    Complete WebSocket event dispatched to the frontend after every answer.
-    """
     event: str = "turn_completed"
     candidate_answer: str
-    garding : GardingResult
-
-    policy_action: str
-    next_depth_level: str
+    grading: GradingResult
     telemetry: BKTTelemetry
-    policy_reason : str
+    policy_action: str
+    policy_reason: str
     skill_state: str
     next_question: Optional[str] = None
     next_rubric: Optional[LockedRubric] = None
 
-    
-    
     
