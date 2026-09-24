@@ -246,6 +246,77 @@
     </section>
   </main>
 
+    <!-- FINAL AUDIT REPORT MODAL (Hidden by default) -->
+  <div id="report-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-dark-600/80 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-dark-600/60 bg-dark-800/60 flex items-center justify-between">
+        <div>
+          <span class="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">Assessment Dossier & Audit</span>
+          <h2 class="text-xl font-bold text-white mt-0.5" id="report-headline-title">Candidate Assessment Report</h2>
+        </div>
+        <div class="flex items-center gap-3">
+          <button onclick="copyReportMarkdown()" class="px-3 py-1.5 text-xs font-mono bg-dark-700 hover:bg-dark-600 text-slate-200 border border-dark-600 rounded-lg transition-colors flex items-center gap-1.5">
+            <span>📋 Copy Markdown</span>
+          </button>
+          <button onclick="closeReportModal()" class="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 text-slate-400 hover:text-white flex items-center justify-center font-mono">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-6 overflow-y-auto space-y-6 flex-1">
+        
+        <!-- Summary Cards Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono text-xs">
+          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Assessed Skill</span>
+            <span class="text-base font-bold text-slate-100" id="report-skill">FastAPI</span>
+          </div>
+          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Final Classification</span>
+            <span class="text-base font-bold text-emerald-400" id="report-state">VERIFIED</span>
+          </div>
+          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Certified Mastery</span>
+            <span class="text-base font-bold text-blue-400" id="report-mastery">92.1%</span>
+          </div>
+          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Devil's Advocate</span>
+            <span class="text-base font-bold text-amber-300" id="report-da-status">Defended</span>
+          </div>
+        </div>
+
+        <!-- Executive Headline Banner -->
+        <div class="p-4 rounded-xl bg-dark-800/50 border border-dark-600/60 text-sm text-slate-300 leading-relaxed font-sans" id="report-headline">
+          Candidate has demonstrated certified technical competence.
+        </div>
+
+        <!-- Chronological Turn Evidence Trail -->
+        <div class="space-y-4">
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">Chronological Turn Evidence & Math Audit</h3>
+          <div id="report-turns-container" class="space-y-4">
+            <!-- Dynamic turn cards injected here -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-dark-600/60 bg-dark-800/40 flex items-center justify-between">
+        <span class="text-xs font-mono text-slate-500">Bayesian Knowledge Tracing (Corbett & Anderson 1994) Audit Log</span>
+        <div class="flex items-center gap-3">
+          <button onclick="location.reload()" class="px-4 py-2 text-xs font-mono bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-bold">
+            Start New Assessment
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- WEBSOCKET CLIENT SCRIPT -->
     <!-- WEBSOCKET CLIENT SCRIPT -->
   <script>
@@ -320,9 +391,14 @@
 
 
         // Handle Finished State
+        // Handle Finished State
         if (data.skill_state === 'VERIFIED' || data.skill_state === 'SHALLOW') {
           renderInterviewCompletion(data.skill_state);
-        } else {
+          if (data.final_report) {
+            renderAuditReportModal(data.final_report);
+          }
+        }
+ else {
           document.getElementById('submit-btn').disabled = false;
           document.getElementById('candidate-input').disabled = false;
           document.getElementById('candidate-input').focus();
@@ -572,6 +648,98 @@
       const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
       return text.replace(/[&<>"']/g, m => map[m]);
     }
+
+        let currentReport = null;
+
+    function renderAuditReportModal(report) {
+      currentReport = report;
+      document.getElementById('report-skill').textContent = report.skill;
+      document.getElementById('report-state').textContent = report.final_state;
+      document.getElementById('report-mastery').textContent = `${(report.final_mastery * 100).toFixed(1)}%`;
+      
+      const daText = report.da_triggered ? (report.da_defended ? 'Defended ✓' : 'Failed ✗') : 'Not Triggered';
+      document.getElementById('report-da-status').textContent = daText;
+      document.getElementById('report-headline').textContent = report.summary_headline;
+
+      const turnsContainer = document.getElementById('report-turns-container');
+      turnsContainer.innerHTML = report.turns.map(t => {
+        let verdictStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
+        if (t.verdict === 'correct') verdictStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+        else if (t.verdict === 'partial') verdictStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+
+        const sign = t.delta >= 0 ? '+' : '';
+        const deltaColor = t.delta >= 0 ? 'text-emerald-400' : 'text-rose-400';
+
+        return `
+          <div class="p-4 rounded-xl bg-dark-800 border border-dark-600/60 space-y-3 font-sans text-xs">
+            <!-- Turn Header -->
+            <div class="flex items-center justify-between font-mono">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-bold">Turn ${t.turn_number} (${t.depth_level})</span>
+                <span class="text-slate-500">Rubric: ${escapeHtml(t.rubric_id)}</span>
+              </div>
+              <span class="px-2 py-0.5 rounded border uppercase font-bold ${verdictStyle}">Verdict: ${t.verdict}</span>
+            </div>
+
+            <!-- Question & Answer -->
+            <div class="space-y-1.5">
+              <p class="text-slate-200 font-semibold">Q: ${escapeHtml(t.question_text)}</p>
+              <div class="p-2.5 rounded-lg bg-dark-900/60 text-slate-300 border border-dark-600/40 italic">
+                "${escapeHtml(t.candidate_answer)}"
+              </div>
+            </div>
+
+            <!-- Grader Rationale -->
+            <div class="text-slate-400">
+              <strong class="text-slate-300">Grader Rationale:</strong> ${escapeHtml(t.rationale)}
+            </div>
+
+            <!-- BKT Math & Trace Footer -->
+            <div class="pt-2 border-t border-dark-600/40 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
+              <div class="flex items-center gap-3">
+                <span class="text-slate-400">Prior: <strong>${t.prior_mastery.toFixed(4)}</strong></span>
+                <span class="text-slate-400">Posterior: <strong>${t.posterior.toFixed(4)}</strong></span>
+                <span class="text-slate-400">New Mastery: <strong class="text-indigo-300">${t.next_mastery.toFixed(4)}</strong></span>
+                <span class="${deltaColor}">Δ (${sign}${t.delta.toFixed(4)})</span>
+              </div>
+              <div class="text-slate-500">
+                Route: <span class="text-slate-300">${escapeHtml(t.policy_action)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('report-modal').classList.remove('hidden');
+    }
+
+    function closeReportModal() {
+      document.getElementById('report-modal').classList.add('hidden');
+    }
+
+    function copyReportMarkdown() {
+      if (!currentReport) return;
+      let md = `# Candidate Assessment & Audit Dossier: ${currentReport.skill}\n\n`;
+      md += `- **Final Status:** ${currentReport.final_state}\n`;
+      md += `- **Certified Mastery:** ${(currentReport.final_mastery * 100).toFixed(1)}%\n`;
+      md += `- **Devil's Advocate:** ${currentReport.da_triggered ? (currentReport.da_defended ? 'Defended' : 'Failed') : 'Not Triggered'}\n\n`;
+      md += `### Summary\n${currentReport.summary_headline}\n\n`;
+      md += `### Turn-by-Turn Evidence Trail\n\n`;
+
+      currentReport.turns.forEach(t => {
+        md += `#### Turn ${t.turn_number} (${t.depth_level}) - Verdict: ${t.verdict.toUpperCase()}\n`;
+        md += `**Question:** ${t.question_text}\n\n`;
+        md += `**Candidate Answer:** "${t.candidate_answer}"\n\n`;
+        md += `**Grader Rationale:** ${t.rationale}\n\n`;
+        md += `**BKT Math:** Prior ${t.prior_mastery.toFixed(4)} -> Posterior ${t.posterior.toFixed(4)} -> Next Mastery ${t.next_mastery.toFixed(4)} (Delta: ${t.delta >= 0 ? '+' : ''}${t.delta.toFixed(4)})\n\n`;
+        md += `**Route:** ${t.policy_action} | **Trace:** ${t.pipeline_trace.join(' -> ')}\n\n---\n\n`;
+      });
+
+      navigator.clipboard.writeText(md).then(() => {
+        alert('Audit Dossier copied to clipboard as Markdown!');
+      });
+    }
+
 
     // Initialize Connection on Load
     window.addEventListener('DOMContentLoaded', connectWebSocket);

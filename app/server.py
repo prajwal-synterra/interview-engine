@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 import json
 import os
 
-from app.models import LockedRubric, GradingResult, BKTTelemetry, TurnResponse
+from app.models import LockedRubric, GradingResult, BKTTelemetry, TurnResponse, TurnAuditRecord, FinalAuditReport
 from app.bkt import update_mastery, DEFAULT_PRIOR, DEPTH_LEVEL_PARAMS
 from app.policy import evaluate_policy, PolicyDecision
 from app.gemini_service import (
@@ -29,7 +29,7 @@ templates = Jinja2Templates(directory="templates")
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
     """Serves the main interview screen & live BKT inspector."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request,name="index.html")
 
 
 class InterviewSession:
@@ -42,8 +42,10 @@ class InterviewSession:
         self.turn_number = 0
         self.state = "IN_PROGRESS"
         self.has_faced_da = False
+        self.da_defended = False
         self.is_da_turn = False
         self.active_rubric: LockedRubric = None
+        self.turns_history: list[TurnAuditRecord] = []
 
 
 @app.websocket("/ws/interview")
@@ -131,6 +133,36 @@ async def interview_websocket(websocket: WebSocket):
                     has_faced_da=session.has_faced_da,
                 )
 
+                                # Track if Devil's Advocate was successfully defended
+                if session.is_da_turn and grading.verdict == "correct":
+                    session.da_defended = True
+
+                # Record this turn in the audit trail
+                audit_record = TurnAuditRecord(
+                    turn_number=session.turn_number,
+                    depth_level=session.current_depth,
+                    question_text=session.active_rubric.question_text,
+                    rubric_id=session.active_rubric.rubric_id,
+                    candidate_answer=candidate_answer,
+                    verdict=grading.verdict,
+                    rationale=grading.rationale,
+                    prior_mastery=session.prior_mastery,
+                    guess_used=params.guess,
+                    slip_used=params.slip,
+                    learn_used=params.learn,
+                    posterior=posterior,
+                    next_mastery=next_mastery,
+                    delta=delta,
+                    policy_action=policy_decision.action,
+                    policy_reason=policy_decision.reason,
+                    pipeline_trace=[
+                        "gemini.grade_answer_with_rubric()",
+                        "bkt.update_mastery()",
+                        "policy.evaluate_policy()"
+                    ]
+                )
+                session.turns_history.append(audit_record)
+
                 # Update session mastery
                 session.prior_mastery = next_mastery
                 session.state = policy_decision.state
@@ -138,10 +170,27 @@ async def interview_websocket(websocket: WebSocket):
                 # Step 4: Handle Next Question or Exit
                 next_question = None
                 next_rubric = None
+                final_report = None
 
                 if policy_decision.state in ("VERIFIED", "SHALLOW"):
-                    # Interview completed for this skill
+                    # Interview completed! Compile final audit report
                     session.is_da_turn = False
+                    
+                    if policy_decision.state == "VERIFIED":
+                        headline = f"Candidate certified as VERIFIED Senior Engineer in {session.skill} ({next_mastery*100:.1f}% Mastery). Successfully defended architectural trade-offs."
+                    else:
+                        headline = f"Assessment concluded. Competency ceiling recorded as SHALLOW in {session.skill} ({next_mastery*100:.1f}% Mastery) after {session.attempts} attempts."
+
+                    final_report = FinalAuditReport(
+                        skill=session.skill,
+                        final_state=session.state,
+                        final_mastery=next_mastery,
+                        total_turns=session.turn_number,
+                        da_triggered=session.has_faced_da,
+                        da_defended=session.da_defended,
+                        summary_headline=headline,
+                        turns=session.turns_history
+                    )
                 elif policy_decision.action == "TRIGGER_DEVILS_ADVOCATE":
                     # Generate Devil's Advocate adversarial challenge
                     await websocket.send_text(json.dumps({
@@ -169,7 +218,7 @@ async def interview_websocket(websocket: WebSocket):
                     session.active_rubric = next_rubric
                     next_question = next_rubric.question_text
 
-                # Step 5: Send Complete Turn Response to Frontend
+                # Step 5: Send Complete Turn Response with Final Report (if finished)
                 response_payload = TurnResponse(
                     event="turn_completed",
                     candidate_answer=candidate_answer,
@@ -180,6 +229,7 @@ async def interview_websocket(websocket: WebSocket):
                     skill_state=session.state,
                     next_question=next_question,
                     next_rubric=next_rubric,
+                    final_report=final_report,
                 )
 
                 await websocket.send_text(json.dumps(response_payload.model_dump()))

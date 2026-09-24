@@ -37,11 +37,13 @@ def check_devils_advocate_trigger(
     has_faced_da: bool
 ) -> bool:
     """
-    Evaluates the 3 deterministic Devil's Advocate trigger conditions:
-    1. Advanced Level: depth is L3 or L4
-    2. Steep Surge: Delta >= 0.20 in this turn
-    3. Threshold: Resulting mastery >= 0.85
-    Plus: Has not already faced Devil's Advocate in this session.
+    Evaluates Devil's Advocate trigger conditions:
+    1. Candidate has not already faced Devil's Advocate in this session.
+    2. Depth level is L3 or L4.
+    3. Triggered if EITHER:
+       a) Steep single-turn surge (Delta >= 0.20) nearing threshold (Mastery >= 0.85)
+       b) Mandatory Senior Gate: Candidate is attempting to EXIT_VERIFIED (Mastery >= 0.85)
+          at L3/L4. Certification is blocked until trade-offs are defended!
     """
     if has_faced_da:
         return False
@@ -51,7 +53,9 @@ def check_devils_advocate_trigger(
     is_steep_surge = delta >= 0.20
     is_near_exit = next_mastery >= MASTERY_VERIFICATION_THRESHOLD
 
-    return is_advanced and is_steep_surge and is_near_exit
+    # Fires on steep surge OR as mandatory gate before verification
+    return is_advanced and (is_steep_surge or is_near_exit)
+
 
 
 def evaluate_policy(

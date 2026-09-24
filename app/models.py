@@ -39,7 +39,8 @@ class GradingResult(BaseModel):
 
 class BKTTelemetry(BaseModel):
     """
-    Real-time mathematical snapshot emitted after each Bayesian update.
+    Real-time 
+    mathematical snapshot emitted after each Bayesian update.
     """
 
     turn_number:int
@@ -63,5 +64,41 @@ class TurnResponse(BaseModel):
     skill_state: str
     next_question: Optional[str] = None
     next_rubric: Optional[LockedRubric] = None
+    final_report: Optional[FinalAuditReport] = None
+
+
+#audit data schemas
+
+class TurnAuditRecord(BaseModel):
+    """Detailed audit snapshot of a single question-answer cycle."""
+    turn_number: int
+    depth_level: str
+    question_text: str
+    rubric_id: str
+    candidate_answer: str
+    verdict: Literal["correct", "partial", "incorrect"]
+    rationale: str
+    prior_mastery: float
+    guess_used: float
+    slip_used: float
+    learn_used: float
+    posterior: float
+    next_mastery: float
+    delta: float
+    policy_action: str
+    policy_reason: str
+    pipeline_trace: List[str] = Field(default_factory=list)
+
+
+class FinalAuditReport(BaseModel):
+    """Executive assessment report generated at the conclusion of an interview."""
+    skill: str
+    final_state: str  # VERIFIED, SHALLOW
+    final_mastery: float
+    total_turns: int
+    da_triggered: bool
+    da_defended: bool
+    summary_headline: str
+    turns: List[TurnAuditRecord]
 
     
