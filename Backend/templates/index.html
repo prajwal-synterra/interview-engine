@@ -2,18 +2,130 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PDF Upload Only</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume Interview</title>
 </head>
 <body>
-    <h2>Upload your PDF Document</h2>
-    
-    <form action="http://127.0.0.1:8000/upload_resume" method="POST" enctype="multipart/form-data">
-        
-        <label for="pdf-file">Select PDF:</label>
-        <input type="file" id="pdf-file" name="pdf_file" accept=".pdf" required>
-        
-        <br><br>
-        <button type="submit">Upload Resume</button>
+    <h1>Upload your resume</h1>
+    <form id="resume-form">
+        <input type="file" id="pdf-file" name="pdf_file" accept="application/pdf" required>
+        <button type="submit">Parse resume</button>
     </form>
+    <p id="message"></p>
+    <pre id="result"></pre>
+    <button id="start-interview" type="button" disabled>Start interview</button>
+    <button id="stop-interview" type="button" disabled>Stop interview</button>
+    <p id="connection-status"></p>
+    <div id="transcript"></div>
+
+    <script>
+        const form = document.getElementById("resume-form");
+        const message = document.getElementById("message");
+        const result = document.getElementById("result");
+        const startButton = document.getElementById("start-interview");
+        const stopButton = document.getElementById("stop-interview");
+        const connectionStatus = document.getElementById("connection-status");
+        const transcript = document.getElementById("transcript");
+        let socket;
+        let audioContext;
+        let microphone;
+        let processor;
+        let nextAudioTime = 0;
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            message.textContent = "Parsing resume...";
+            result.textContent = "";
+
+            const formData = new FormData(form);
+            try {
+                const response = await fetch("/upload_resume", {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || "Upload failed");
+                }
+                message.textContent = "Resume parsed. This data is ready for the interview.";
+                result.textContent = JSON.stringify(data.resume, null, 2);
+                startButton.disabled = false;
+            } catch (error) {
+                message.textContent = error.message;
+            }
+        });
+
+        function addTranscript(speaker, text) {
+            const line = document.createElement("p");
+            line.textContent = `${speaker}: ${text}`;
+            transcript.appendChild(line);
+        }
+
+        function playPcmAudio(data) {
+            const samples = new Int16Array(data);
+            const buffer = audioContext.createBuffer(1, samples.length, 24000);
+            const channel = buffer.getChannelData(0);
+            for (let index = 0; index < samples.length; index += 1) {
+                channel[index] = samples[index] / 32768;
+            }
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            nextAudioTime = Math.max(nextAudioTime, audioContext.currentTime);
+            source.start(nextAudioTime);
+            nextAudioTime += buffer.duration;
+        }
+
+        function floatToPcm16(floatData) {
+            const pcmData = new Int16Array(floatData.length);
+            for (let index = 0; index < floatData.length; index += 1) {
+                const sample = Math.max(-1, Math.min(1, floatData[index]));
+                pcmData[index] = sample < 0 ? sample * 32768 : sample * 32767;
+            }
+            return pcmData;
+        }
+
+        startButton.addEventListener("click", async () => {
+            const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+            socket = new WebSocket(`${protocol}://${window.location.host}/ws/interview`);
+            socket.binaryType = "arraybuffer";
+            audioContext = new AudioContext({ sampleRate: 16000 });
+            await audioContext.resume();
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            microphone = audioContext.createMediaStreamSource(stream);
+            processor = audioContext.createScriptProcessor(4096, 1, 1);
+            processor.onaudioprocess = (event) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(floatToPcm16(event.inputBuffer.getChannelData(0)).buffer);
+                }
+            };
+            microphone.connect(processor);
+            processor.connect(audioContext.destination);
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            connectionStatus.textContent = "Connecting to interviewer...";
+
+            socket.onmessage = async (event) => {
+                if (typeof event.data !== "string") {
+                    playPcmAudio(await event.data.arrayBuffer());
+                    return;
+                }
+                const data = JSON.parse(event.data);
+                if (data.type === "connected") connectionStatus.textContent = "Interview live";
+                if (data.type === "model_transcript" || data.type === "model_text") addTranscript("Interviewer", data.text);
+                if (data.type === "candidate_transcript") addTranscript("You", data.text);
+                if (data.type === "error") connectionStatus.textContent = data.message;
+            };
+        });
+
+        stopButton.addEventListener("click", () => {
+            if (processor) processor.disconnect();
+            if (microphone) microphone.mediaStream.getTracks().forEach((track) => track.stop());
+            if (socket) socket.close();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            connectionStatus.textContent = "Interview stopped";
+        });
+    </script>
 </body>
 </html>

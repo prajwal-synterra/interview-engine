@@ -1,3 +1,4 @@
 uv
 fastapi[standard]
 python-multipart
+google-genai
