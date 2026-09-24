@@ -54,17 +54,47 @@ class BKTTelemetry(BaseModel):
     next_mastery: float
     delta: float
 
+# --- Skill Extraction & Interceptor Schemas --- 
+class ExtractedSKills(BaseModel):
+    """Structed output extracted from candidate's intro"""
+    skills: List[str] = Field(
+        description="List of primary tech skills , frameworks or tools mentioned"
+    )
+
+class SpotCheckRecord(BaseModel):
+    """Auditing the new reacord for the quetsions asked between the verification of primary skill and the 
+    the final """
+    skill_name: str
+    question_1 : str
+    answer_1:str
+    verdict_1:Optional[Literal["correct","incorrect","partial"]]
+    question_2:Optional[str]
+    answer_2:Optional[str]
+    verdict_2:Optional[Literal["correct","incorrect","partial"]]
+    final_verdict : Literal["VERIFIED_HANDS_ON","UNVERIFIED_BUZZWORD","IN_PROGRESS"] = "IN_PROGRESS"
+    rationale: str = ""
+
+
+
 class TurnResponse(BaseModel):
+    """Payload sent over WebSocket to frontend on turn events."""
     event: str = "turn_completed"
-    candidate_answer: str
-    grading: GradingResult
-    telemetry: BKTTelemetry
-    policy_action: str
-    policy_reason: str
-    skill_state: str
+    session_phase: Literal["INTRO", "PRIMARY_SKILL", "SPOT_CHECK", "COMPLETED"] = "PRIMARY_SKILL"
+    active_skill: Optional[str] = None
+    queued_skills: List[str] = Field(default_factory=list)
+    completed_skills: List[str] = Field(default_factory=list)
+    spot_check_progress: Optional[str] = None  # e.g., "Spot-Check Q1 of 2: Redis"
+    candidate_answer: Optional[str] = None
+    grading: Optional[GradingResult] = None
+    telemetry: Optional[BKTTelemetry] = None
+    policy_action: Optional[str] = None
+    policy_reason: Optional[str] = None
+    skill_state: Optional[str] = None
     next_question: Optional[str] = None
     next_rubric: Optional[LockedRubric] = None
     final_report: Optional[FinalAuditReport] = None
+    multi_skill_dossier: Optional[MultiSkillDossier] = None
+
 
 
 #audit data schemas
@@ -101,4 +131,14 @@ class FinalAuditReport(BaseModel):
     summary_headline: str
     turns: List[TurnAuditRecord]
 
+
+class MultiSkillDossier(BaseModel):
+    """overaeching dossier aggregating all completed primary skills and spot-checked tangents."""
+    primary_skills_report: List[FinalAuditReport] = Field(default_factory=list)
+    spot_check_records: List[SpotCheckRecord] = Field(default_factory=list)
+    verified_skills :List[str]= Field(default_factory=list)
+    unverified_buzzwords: List[str] = Field(default_factory=list)
+    shallow_skills: List[str] = Field(default_factory=list)
+    executive_summary : str = ""
     
+
