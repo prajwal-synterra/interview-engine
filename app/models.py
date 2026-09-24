@@ -1,0 +1,74 @@
+"""
+Pydantic Data Models & Schemas
+Defines the contracts for Rubric-Lock, BKT Telemetry, and Session State.
+"""
+
+
+from typing import List, Literal, Optional
+from pydantic import BaseModel, Field
+import uuid
+from datetime import datetime
+
+
+class LockedRubric(BaseModel):
+    """ Rubric-Locak contract ("The law"). Forzen in memory before the candiate ever see the questions"""
+
+    rubric_id : str = Field(default_factory=lambda:f"RUB-{uuid.uuid4().hex[:-8].upper()}")
+    skill_name : str
+    depth_level : str
+    question_text : str
+    required_criteria: List[str] = Field(
+        description="Key conceptual facts or mechanics the candidate must demonstrate to pass this level"
+    )
+    prohibited_misconceptions: List[str] = Field(
+        description="Common flawed assumption or buzzwords that disqualifiy full credits"  
+    )
+    is_devils_advocate: bool = False
+    created_at : str = Field(default_factory=lambda: datetime.now().strftime("%H:%M:%S"))
+
+class GardingResult(BaseModel):
+    """
+    Discrete Grader Output.
+    Gemini is restricted to classification against the locked rubric.
+    It NEVER computes numbers or mastery scores.
+    """
+    verdict: Literal["correct","incorrect"]
+    rationale:str =Field(description="Clear, concise explanation of why this answer meets or violates the rubric")
+    matched_criteria: List[str] = Field(default_factory=list, description="Specific required criteria that were hit")
+    violated_misconceptions: List[str] = Field(default_factory=list, description="Specific prohibited assumptions that were detected")
+
+class BKTTelemetry(BaseModel):
+    """
+    Real-time mathematical snapshot emitted after each Bayesian update.
+    """
+
+    turn_number:int
+    depth_level :str
+    verdict: Literal["correct","incorrect"]
+    prior: float
+    guess_used: float
+    slip_used: float
+    learn_used: float
+    posterior: float
+    next_mastery: float
+    delta: float
+
+class TurnResponse(BaseModel):
+    """
+    Complete WebSocket event dispatched to the frontend after every answer.
+    """
+    event: str = "turn_completed"
+    candidate_answer: str
+    garding : GardingResult
+
+    policy_action: str
+    next_depth_level: str
+    telemetry: BKTTelemetry
+    policy_reason : str
+    skill_state: str
+    next_question: Optional[str] = None
+    next_rubric: Optional[LockedRubric] = None
+
+    
+    
+    
