@@ -5,6 +5,7 @@ and Devil's Advocate adversarial trade-off challenges.
 Strictly isolated from score and mastery calculations.
 """
 
+from fastapi import responses
 import os
 import time
 from dotenv import load_dotenv
@@ -12,9 +13,9 @@ from google import genai
 from google.genai import types
 
 try:
-    from app.models import LockedRubric, GradingResult
+    from app.models import LockedRubric, GradingResult, ExtractedSkills
 except ModuleNotFoundError:
-    from models import LockedRubric, GradingResult
+    from models import LockedRubric, GradingResult, ExtractedSkills
 
 load_dotenv()
 
@@ -54,6 +55,82 @@ def call_gemini_with_retry(prompt: str, schema, temperature: float = 0.2, max_re
 
     raise last_err
 
+def extract_skills_from_intro(candidate_intro) -> list[str]:
+    """
+    Extracts a clean list of technical skills and technologies mentioned
+    in the candidate's self-introduction.
+    """
+    prompt = f"""
+You are an expert technical interviewer analyzing a candidate's self-introduction.
+Candidate Introduction:
+"{candidate_intro}"
+Extract the primary technical skills, frameworks, databases, or languages explicitly mentioned by the candidate that are suitable for deep technical interview assessment (e.g., 'FastAPI', 'PostgreSQL', 'Docker', 'Redis', 'Python', 'Kubernetes').
+Rules:
+- Return between 2 and 5 skills.
+- Normalize names into standard industry casing (e.g., 'FastAPI', 'PostgreSQL', 'Docker', 'Node.js').
+- If the candidate mentioned fewer than 2 concrete skills or gave a vague introduction, include foundational skills that align with what they mentioned, or default to ['Python', 'System Architecture'].
+Return strictly structured as ExtractedSkills.
+"""
+    try:
+        response = call_gemini_with_retry(prompt,ExtractedSkills,temperature=0.1)
+        data = ExtractedSkills.model_validate_json(response.text)
+        cleaned = []
+        for s in data.skills:
+            s_clean = s.strip()
+            if s_clean and s_clean.lower() not in [x.lower() for x in cleaned]:
+                cleaned.append(s_clean)
+        
+        return cleaned
+    except Exception as e:
+        print(f"[Gemini Error] Failed to extract skills: {e}")
+        return ['Python', 'System Architecture']
+
+def detect_mentioned_skills(candidate_answer:str)-> list[str]:
+    """
+    This if for fetching skills when user is on interview and answering the questions for L1 rto l4
+    """
+    prompt= f"""
+You are a technical analyzer reviewing an engineer's interview response.
+Response:
+"{candidate_answer}"
+Identify any specific external technologies, databases, message brokers, caching systems, or architectural tools explicitly mentioned by the candidate as tools they used or recommended (e.g., 'Redis', 'Celery', 'PostgreSQL', 'Kafka', 'Docker', 'RabbitMQ', 'Elasticsearch').
+Rules:
+- Only include specific concrete technologies or tools, NOT general programming concepts (do NOT include 'concurrency', 'threads', 'async', 'REST', 'API', 'functions', 'loops').
+- Return strictly structured as ExtractedSkills. If none are mentioned, return an empty list.
+"""
+    try:
+        response = call_gemini_with_retry(prompt,ExtractedSkills, temperature=0.0)
+        data = ExtractedSkills.model_validate_json(response.text)
+        return [s.strip() for s in data.skills if s.strip()]
+    except Exception:
+        return []    
+
+def generate_spot_check_question(skill:str, question_index:int, previous_context:str) -> LockedRubric:
+    """
+    Generate a question that is mentioned in the interview
+    """
+    if question_index == 1:
+        focus = "Concrete Architecture & Integration: Ask specifically how they configured, integrated, or implemented this technology in a production codebase."
+    else:
+        focus = "Production Bottlenecks & Trade-offs: Ask specifically about failure modes, memory limits, connection pooling, scaling limits, or edge-case gotchas they faced."
+    
+    prompt = f"""
+You are an engineering interviewer conducting a quick 2-question spot-check verification.
+The candidate casually mentioned experience with: '{skill}'.
+Context / quote from candidate: "{previous_context}"
+Question Phase: {question_index} of 2.
+Focus: {focus}
+Task:
+1. Formulate a direct, practical question testing whether the candidate genuinely worked with {skill} or is merely name-dropping it.
+2. Formulate 2 required criteria that indicate genuine hands-on experience.
+3. Formulate 1-2 prohibited misconceptions or vague generic answers.
+Return the result strictly structured as a LockedRubric.
+"""
+    response = call_gemini_with_retry(prompt,LockedRubric, temperature=0.3)
+    rubric_data = LockedRubric.model_validate_json(response.text)
+    rubric_data.skill_name = skill
+    rubric_data.depth_level = f"Spot-check-{question_index}"
+    return rubric_data
 
 def generate_question_and_rubric(skill: str, depth_level: str) -> LockedRubric:
     """

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Adaptive Interview Engine | BKT & Rubric-Lock POC</title>
+  <title>Adaptive Multi-Skill Interview Engine | BKT & Rubric-Lock</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -54,6 +54,12 @@
       50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.7); }
     }
     .da-alert { animation: da-pulse 1.8s infinite ease-in-out; }
+
+    @keyframes spot-pulse {
+      0%, 100% { box-shadow: 0 0 12px rgba(6, 182, 212, 0.4); }
+      50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.6); }
+    }
+    .spot-alert { animation: spot-pulse 1.6s infinite ease-in-out; }
   </style>
 </head>
 
@@ -62,9 +68,9 @@
   <!-- TOP HEADER -->
   <header class="h-16 border-b border-dark-600/60 bg-dark-800/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-50">
     <div class="flex items-center gap-3">
-      <span class="px-2.5 py-1 text-xs font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">POC v1</span>
+      <span class="px-2.5 py-1 text-xs font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">POC v2</span>
       <h1 class="text-base font-semibold text-slate-200">
-        Adaptive Interview Engine <span class="text-slate-500 font-normal">/ BKT + Rubric-Lock System</span>
+        Adaptive Interview Engine <span class="text-slate-500 font-normal">/ Multi-Skill Queue & Spot-Check Interceptor</span>
       </h1>
     </div>
 
@@ -81,13 +87,20 @@
     <!-- LEFT PANEL: CANDIDATE INTERVIEW ROOM (7 Columns) -->
     <section class="lg:col-span-7 flex flex-col border-r border-dark-600/60 bg-dark-900">
       
-      <!-- Panel Bar -->
-      <div class="h-12 px-6 border-b border-dark-600/40 bg-dark-800/40 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-xs font-mono uppercase tracking-wider text-slate-400">Active Skill:</span>
-          <span id="skill-badge" class="px-2 py-0.5 text-xs font-bold font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded">FastAPI</span>
+      <!-- Panel Bar: Dynamic Skill Queue Bar -->
+      <div class="h-14 px-6 border-b border-dark-600/40 bg-dark-800/40 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-2.5 overflow-x-auto py-1">
+          <span class="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold shrink-0">Skill Queue:</span>
+          <div id="skill-queue-container" class="flex items-center gap-1.5 font-mono text-xs">
+            <span class="px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold">Intro</span>
+          </div>
         </div>
-        <span class="text-xs text-slate-500 font-mono">Press Ctrl + Enter to submit</span>
+        
+        <!-- Spot Check In-Flight Alert Badge -->
+        <div id="spot-check-badge" class="hidden px-2.5 py-1 text-xs font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 rounded-full flex items-center gap-1.5 spot-alert shrink-0">
+          <span>⚡</span>
+          <span id="spot-check-badge-text">Spot-Check Probe</span>
+        </div>
       </div>
 
       <!-- Live Chat Transcript Area -->
@@ -107,7 +120,7 @@
           <textarea 
             id="candidate-input" 
             rows="3" 
-            placeholder="Type your technical response here... Explain mechanics and trade-offs."
+            placeholder="Type your response here... (e.g., introduction or technical architectural explanation)"
             class="w-full bg-transparent text-sm text-slate-200 placeholder-slate-500 focus:outline-none resize-none font-sans"
           ></textarea>
           
@@ -192,7 +205,7 @@
         <!-- Animated Mastery Meter -->
         <div class="mb-4">
           <div class="flex justify-between text-xs font-mono mb-1.5">
-            <span class="text-slate-400">Latent Mastery P(L):</span>
+            <span class="text-slate-400">Active Skill Mastery P(L):</span>
             <span id="mastery-pct" class="font-bold text-blue-400">30.0%</span>
           </div>
           <div class="w-full h-3 rounded-full bg-dark-900 border border-dark-600/80 overflow-hidden p-0.5">
@@ -239,26 +252,26 @@
       <div class="rounded-xl border border-dark-600/80 bg-dark-800/70 p-4 shadow-sm">
         <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-emerald-400 mb-1">Policy Engine Routing</h3>
         <p id="policy-reason" class="text-xs text-slate-300 font-sans leading-relaxed">
-          Session initialized. Presenting candidate with foundational diagnostic question.
+          Session initialized. Presenting candidate with introduction prompt to build the dynamic skill queue.
         </p>
       </div>
 
     </section>
   </main>
 
-    <!-- FINAL AUDIT REPORT MODAL (Hidden by default) -->
-  <div id="report-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-dark-900 border border-dark-600/80 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+  <!-- FINAL AUDIT REPORT MODAL (Hidden by default) -->
+  <div id="report-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-dark-600/80 rounded-2xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
       
       <!-- Modal Header -->
       <div class="p-6 border-b border-dark-600/60 bg-dark-800/60 flex items-center justify-between">
         <div>
-          <span class="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">Assessment Dossier & Audit</span>
-          <h2 class="text-xl font-bold text-white mt-0.5" id="report-headline-title">Candidate Assessment Report</h2>
+          <span class="px-2.5 py-0.5 text-[11px] font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded">Certified Master Dossier</span>
+          <h2 class="text-xl font-bold text-white mt-1" id="report-headline-title">Multi-Skill Candidate Assessment Report</h2>
         </div>
         <div class="flex items-center gap-3">
-          <button onclick="copyReportMarkdown()" class="px-3 py-1.5 text-xs font-mono bg-dark-700 hover:bg-dark-600 text-slate-200 border border-dark-600 rounded-lg transition-colors flex items-center gap-1.5">
-            <span>📋 Copy Markdown</span>
+          <button onclick="copyReportMarkdown()" class="px-3 py-1.5 text-xs font-mono bg-dark-700 hover:bg-dark-600 text-slate-200 border border-dark-600 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
+            <span>📋 Copy Markdown Dossier</span>
           </button>
           <button onclick="closeReportModal()" class="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 text-slate-400 hover:text-white flex items-center justify-center font-mono">
             ✕
@@ -269,34 +282,30 @@
       <!-- Modal Body (Scrollable) -->
       <div class="p-6 overflow-y-auto space-y-6 flex-1">
         
-        <!-- Summary Cards Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono text-xs">
-          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
-            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Assessed Skill</span>
-            <span class="text-base font-bold text-slate-100" id="report-skill">FastAPI</span>
-          </div>
-          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
-            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Final Classification</span>
-            <span class="text-base font-bold text-emerald-400" id="report-state">VERIFIED</span>
-          </div>
-          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
-            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Certified Mastery</span>
-            <span class="text-base font-bold text-blue-400" id="report-mastery">92.1%</span>
-          </div>
-          <div class="bg-dark-800/80 p-3.5 rounded-xl border border-dark-600/60">
-            <span class="text-[10px] text-slate-400 uppercase tracking-wider block">Devil's Advocate</span>
-            <span class="text-base font-bold text-amber-300" id="report-da-status">Defended</span>
-          </div>
-        </div>
-
         <!-- Executive Headline Banner -->
-        <div class="p-4 rounded-xl bg-dark-800/50 border border-dark-600/60 text-sm text-slate-300 leading-relaxed font-sans" id="report-headline">
-          Candidate has demonstrated certified technical competence.
+        <div class="p-4 rounded-xl bg-dark-800/60 border border-dark-600/60 text-sm text-slate-200 leading-relaxed font-sans" id="report-headline">
+          Candidate technical evaluation concluded. Review certified competencies and spot-check evidence below.
         </div>
 
-        <!-- Chronological Turn Evidence Trail -->
-        <div class="space-y-4">
-          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">Chronological Turn Evidence & Math Audit</h3>
+        <!-- Section 1: Primary Skills Evaluation Grid -->
+        <div class="space-y-3">
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">1. Primary Assessed Skills (BKT + Rubric-Lock)</h3>
+          <div id="primary-skills-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- Dynamic primary skill cards injected here -->
+          </div>
+        </div>
+
+        <!-- Section 2: In-Flight Spot-Check Probes -->
+        <div class="space-y-3">
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400">2. In-Flight Spot-Check Probes (Hands-On vs. Buzzword Detection)</h3>
+          <div id="spot-checks-container" class="space-y-3">
+            <!-- Dynamic spot check cards injected here -->
+          </div>
+        </div>
+
+        <!-- Section 3: Chronological Turn Evidence Trail -->
+        <div class="space-y-4 pt-2 border-t border-dark-600/40">
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">3. Chronological Turn Evidence & Math Audit</h3>
           <div id="report-turns-container" class="space-y-4">
             <!-- Dynamic turn cards injected here -->
           </div>
@@ -306,21 +315,20 @@
 
       <!-- Modal Footer -->
       <div class="p-4 border-t border-dark-600/60 bg-dark-800/40 flex items-center justify-between">
-        <span class="text-xs font-mono text-slate-500">Bayesian Knowledge Tracing (Corbett & Anderson 1994) Audit Log</span>
-        <div class="flex items-center gap-3">
-          <button onclick="location.reload()" class="px-4 py-2 text-xs font-mono bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-bold">
-            Start New Assessment
-          </button>
-        </div>
+        <span class="text-xs font-mono text-slate-500">Bayesian Knowledge Tracing (Corbett & Anderson 1994) + Rubric-Lock Certified</span>
+        <button onclick="location.reload()" class="px-4 py-2 text-xs font-mono bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-bold">
+          Start New Assessment
+        </button>
       </div>
 
     </div>
   </div>
 
   <!-- WEBSOCKET CLIENT SCRIPT -->
-    <!-- WEBSOCKET CLIENT SCRIPT -->
   <script>
     let socket = null;
+    let currentDossier = null;
+    let singleSkillReport = null;
 
     function connectWebSocket() {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -355,50 +363,75 @@
       const event = data.event;
 
       if (event === 'session_started') {
-        renderQuestion(data.question, data.depth_level, data.is_devils_advocate, data.rubric);
-        updateRubricInspector(data.rubric);
-        document.getElementById('skill-badge').textContent = data.skill;
-        document.getElementById('depth-badge').textContent = `Depth: ${data.depth_level}`;
-        document.getElementById('math-prior').textContent = data.prior_mastery.toFixed(4);
-        document.getElementById('math-new-mastery').textContent = data.prior_mastery.toFixed(4);
-        setMasteryPercentage(data.prior_mastery);
+        renderQuestion(data.question, 'Intro', false, null);
+        updateSkillQueue(data.active_skill, data.queued_skills || [], data.completed_skills || []);
+        document.getElementById('depth-badge').textContent = 'Depth: Intro';
+        document.getElementById('rubric-id').textContent = 'RUB-INTRO';
+        document.getElementById('required-list').innerHTML = '<li class="text-slate-400 italic">Please share your background and core technical frameworks/tools.</li>';
+        document.getElementById('prohibited-list').innerHTML = '<li class="text-slate-500 italic">None (Free-form introduction)</li>';
       } 
       else if (event === 'status_update') {
         showActivity(data.message);
       } 
       else if (event === 'turn_completed') {
         hideActivity();
-        renderGradingVerdict(data.candidate_answer, data.grading);
-        updateTelemetry(data.telemetry);
-        updatePolicy(data.policy_action, data.policy_reason, data.skill_state);
 
+        // 1. Update Skill Queue Chips
+        updateSkillQueue(data.active_skill, data.queued_skills || [], data.completed_skills || []);
+
+        // 2. Render grading verdict if available
+        if (data.grading) {
+          renderGradingVerdict(data.candidate_answer, data.grading);
+        }
+
+        // 3. Render telemetry if available
+        if (data.telemetry) {
+          updateTelemetry(data.telemetry);
+        }
+
+        // 4. Update policy routing
+        if (data.policy_reason) {
+          updatePolicy(data.policy_action, data.policy_reason, data.skill_state || 'IN_PROGRESS');
+        }
+
+        // 5. Devil's Advocate Banner toggle
         if (data.policy_action === 'TRIGGER_DEVILS_ADVOCATE') {
           showDevilAdvocateBanner(data.policy_reason);
         } else {
           hideDevilAdvocateBanner();
         }
 
+        // 6. Spot-Check Banner toggle
+        if (data.session_phase === 'SPOT_CHECK') {
+          showSpotCheckBanner(data.spot_check_progress || 'In-Flight Spot-Check');
+        } else {
+          hideSpotCheckBanner();
+        }
+
+        // 7. Update Rubric Inspector
         if (data.next_rubric) {
           updateRubricInspector(data.next_rubric);
         }
 
+        // 8. Render Next Question
         if (data.next_question) {
-          const nextDepth = data.next_rubric ? data.next_rubric.depth_level : data.telemetry.depth_level;
-          renderQuestion(data.next_question, nextDepth, data.policy_action === 'TRIGGER_DEVILS_ADVOCATE', data.next_rubric);
-          document.getElementById('depth-badge').textContent = `Depth: ${nextDepth}`;
+          const depth = data.next_rubric ? data.next_rubric.depth_level : (data.telemetry ? data.telemetry.depth_level : 'L1');
+          const isDA = data.policy_action === 'TRIGGER_DEVILS_ADVOCATE';
+          const isSpot = data.session_phase === 'SPOT_CHECK';
+          renderQuestion(data.next_question, depth, isDA, data.next_rubric, isSpot, data.spot_check_progress);
+          document.getElementById('depth-badge').textContent = `Depth: ${depth}`;
         }
 
-
-
-        // Handle Finished State
-        // Handle Finished State
-        if (data.skill_state === 'VERIFIED' || data.skill_state === 'SHALLOW') {
-          renderInterviewCompletion(data.skill_state);
-          if (data.final_report) {
-            renderAuditReportModal(data.final_report);
+        // 9. Handle Completion
+        if (data.session_phase === 'COMPLETED' || data.multi_skill_dossier) {
+          renderInterviewCompletion('COMPLETED');
+          if (data.multi_skill_dossier) {
+            renderMultiSkillDossierModal(data.multi_skill_dossier);
+          } else if (data.final_report) {
+            singleSkillReport = data.final_report;
+            renderSingleSkillModal(data.final_report);
           }
-        }
- else {
+        } else {
           document.getElementById('submit-btn').disabled = false;
           document.getElementById('candidate-input').disabled = false;
           document.getElementById('candidate-input').focus();
@@ -411,22 +444,19 @@
       const text = input.value.trim();
       if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
 
-      // Render candidate's answer in chat
       renderCandidateMessage(text);
 
-      // Disable inputs while processing
       input.value = '';
       input.disabled = true;
       document.getElementById('submit-btn').disabled = true;
 
-      // Send to server
       socket.send(JSON.stringify({
         action: 'submit_answer',
         answer: text
       }));
     }
 
-    // Enter Key shortcut (Ctrl + Enter)
+    // Ctrl + Enter shortcut
     document.getElementById('candidate-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -434,16 +464,53 @@
       }
     });
 
-    // Chat Renderers
-    function renderQuestion(text, depth, isDA, rubric = null) {
+    // Skill Queue Chips Renderer
+    function updateSkillQueue(activeSkill, queuedSkills, completedSkills) {
+      const container = document.getElementById('skill-queue-container');
+      container.innerHTML = '';
+
+      // Completed Skills
+      completedSkills.forEach(skill => {
+        const chip = document.createElement('span');
+        chip.className = 'px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-semibold';
+        chip.innerHTML = `<span>✓</span><span>${escapeHtml(skill)}</span>`;
+        container.appendChild(chip);
+      });
+
+      // Active Skill
+      if (activeSkill) {
+        const activeChip = document.createElement('span');
+        activeChip.className = 'px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/50 flex items-center gap-1.5 font-bold shadow-sm';
+        activeChip.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span><span>${escapeHtml(activeSkill)}</span>`;
+        container.appendChild(activeChip);
+      }
+
+      // Upcoming Queued Skills
+      queuedSkills.forEach(skill => {
+        const chip = document.createElement('span');
+        chip.className = 'px-2 py-0.5 rounded bg-dark-700/80 text-slate-400 border border-dark-600';
+        chip.textContent = skill;
+        container.appendChild(chip);
+      });
+    }
+
+    // Chat Message Renderers
+    function renderQuestion(text, depth, isDA, rubric = null, isSpot = false, spotProgress = null) {
       const chat = document.getElementById('chat-box');
       const msgDiv = document.createElement('div');
       msgDiv.className = 'flex flex-col space-y-2 max-w-3xl';
       
-      const badgeColor = isDA ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-blue-500/20 text-blue-300 border-blue-500/40';
-      const label = isDA ? '⚡ Devil\'s Advocate Challenge' : `AI Interviewer (${depth})`;
+      let badgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+      let label = `AI Interviewer (${depth})`;
 
-      // Render the Locked Rubric criteria directly inside the question card
+      if (isDA) {
+        badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+        label = '⚡ Devil\'s Advocate Challenge';
+      } else if (isSpot) {
+        badgeColor = 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+        label = `⚡ ${spotProgress || 'In-Flight Spot-Check'}`;
+      }
+
       let rubricHtml = '';
       if (rubric && rubric.required_criteria) {
         rubricHtml = `
@@ -483,7 +550,7 @@
 
       msgDiv.innerHTML = `
         <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+          <span class="w-2 h-2 rounded-full ${isSpot ? 'bg-cyan-400' : (isDA ? 'bg-amber-400' : 'bg-blue-400')}"></span>
           <span class="text-xs font-mono font-bold px-2 py-0.5 rounded border ${badgeColor}">${label}</span>
         </div>
         <div class="p-4 rounded-xl bg-dark-800 border border-dark-600/80 text-sm text-slate-100 leading-relaxed shadow-sm">
@@ -536,24 +603,17 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
-
     function renderInterviewCompletion(state) {
       const chat = document.getElementById('chat-box');
       const endDiv = document.createElement('div');
-      const isVerified = state === 'VERIFIED';
-
-      endDiv.className = `p-6 rounded-2xl border text-center space-y-3 my-4 ${
-        isVerified ? 'bg-emerald-950/30 border-emerald-500/50' : 'bg-amber-950/30 border-amber-500/50'
-      }`;
+      endDiv.className = 'p-6 rounded-2xl border text-center space-y-3 my-4 bg-blue-950/30 border-blue-500/50';
       endDiv.innerHTML = `
-        <span class="text-3xl">${isVerified ? '🎓' : '🛑'}</span>
-        <h3 class="text-lg font-bold font-mono ${isVerified ? 'text-emerald-300' : 'text-amber-300'}">
-          Assessment Complete: ${state}
+        <span class="text-3xl">🎓</span>
+        <h3 class="text-lg font-bold font-mono text-blue-300">
+          All Skills Assessment Concluded
         </h3>
         <p class="text-xs text-slate-300 max-w-md mx-auto">
-          ${isVerified 
-            ? 'Candidate has reached the verified mastery threshold (>= 0.85) and defended trade-offs!' 
-            : 'Candidate reached maximum attempts without crossing the verified threshold. Competency ceiling recorded as Shallow.'}
+          Candidate has completed the dynamic skill queue and in-flight spot checks. The final master dossier is ready!
         </p>
       `;
       chat.appendChild(endDiv);
@@ -565,7 +625,7 @@
       document.getElementById('rubric-id').textContent = rubric.rubric_id;
       
       const reqList = document.getElementById('required-list');
-      reqList.innerHTML = rubric.required_criteria.map(c => `
+      reqList.innerHTML = (rubric.required_criteria || []).map(c => `
         <li class="flex items-start gap-2">
           <span class="text-emerald-400 mt-0.5">✓</span>
           <span class="leading-snug">${escapeHtml(c)}</span>
@@ -573,7 +633,7 @@
       `).join('');
 
       const proList = document.getElementById('prohibited-list');
-      proList.innerHTML = rubric.prohibited_misconceptions.map(m => `
+      proList.innerHTML = (rubric.prohibited_misconceptions || []).map(m => `
         <li class="flex items-start gap-2">
           <span class="text-rose-400 mt-0.5">✗</span>
           <span class="leading-snug">${escapeHtml(m)}</span>
@@ -595,7 +655,6 @@
 
       setMasteryPercentage(t.next_mastery);
 
-      // Delta container
       const deltaContainer = document.getElementById('delta-container');
       const deltaVal = document.getElementById('delta-val');
       deltaContainer.classList.remove('hidden');
@@ -644,25 +703,75 @@
       document.getElementById('da-banner').classList.add('hidden');
     }
 
-    function escapeHtml(text) {
-      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-      return text.replace(/[&<>"']/g, m => map[m]);
+    function showSpotCheckBanner(progressText) {
+      const badge = document.getElementById('spot-check-badge');
+      document.getElementById('spot-check-badge-text').textContent = progressText;
+      badge.classList.remove('hidden');
     }
 
-        let currentReport = null;
+    function hideSpotCheckBanner() {
+      document.getElementById('spot-check-badge').classList.add('hidden');
+    }
 
-    function renderAuditReportModal(report) {
-      currentReport = report;
-      document.getElementById('report-skill').textContent = report.skill;
-      document.getElementById('report-state').textContent = report.final_state;
-      document.getElementById('report-mastery').textContent = `${(report.final_mastery * 100).toFixed(1)}%`;
-      
-      const daText = report.da_triggered ? (report.da_defended ? 'Defended ✓' : 'Failed ✗') : 'Not Triggered';
-      document.getElementById('report-da-status').textContent = daText;
-      document.getElementById('report-headline').textContent = report.summary_headline;
+    function escapeHtml(text) {
+      if (!text) return '';
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return String(text).replace(/[&<>"']/g, m => map[m]);
+    }
 
+    // Modal & Dossier Renderers
+    function renderMultiSkillDossierModal(dossier) {
+      currentDossier = dossier;
+      document.getElementById('report-headline').textContent = dossier.executive_summary;
+
+      // 1. Primary Skills Cards
+      const primaryContainer = document.getElementById('primary-skills-grid');
+      primaryContainer.innerHTML = dossier.primary_skills_reports.map(r => {
+        const isVer = r.final_state === 'VERIFIED';
+        return `
+          <div class="p-3.5 rounded-xl bg-dark-800/80 border border-dark-600/60 font-mono text-xs space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-bold text-slate-100">${escapeHtml(r.skill)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVer ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'}">${r.final_state}</span>
+            </div>
+            <div class="flex items-center justify-between text-slate-400 text-[11px]">
+              <span>Mastery: <strong class="text-blue-400">${(r.final_mastery * 100).toFixed(1)}%</strong></span>
+              <span>DA: <strong>${r.da_triggered ? (r.da_defended ? 'Defended ✓' : 'Failed ✗') : 'N/A'}</strong></span>
+            </div>
+            <p class="text-[11px] text-slate-300 font-sans border-t border-dark-600/30 pt-1.5">${escapeHtml(r.summary_headline)}</p>
+          </div>
+        `;
+      }).join('');
+
+      // 2. In-Flight Spot Checks Cards
+      const spotContainer = document.getElementById('spot-checks-container');
+      if (!dossier.spot_check_records || dossier.spot_check_records.length === 0) {
+        spotContainer.innerHTML = '<div class="text-xs text-slate-500 italic font-mono">No in-flight surprise technologies were mentioned.</div>';
+      } else {
+        spotContainer.innerHTML = dossier.spot_check_records.map(sc => {
+          const isHandsOn = sc.final_verdict === 'VERIFIED_HANDS_ON';
+          return `
+            <div class="p-3.5 rounded-xl bg-dark-800/80 border border-dark-600/60 space-y-2 text-xs">
+              <div class="flex items-center justify-between font-mono">
+                <span class="font-bold text-cyan-300 text-sm">⚡ ${escapeHtml(sc.skill_name)}</span>
+                <span class="px-2 py-0.5 rounded font-bold uppercase text-[10px] ${isHandsOn ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                  ${isHandsOn ? 'Verified Hands-On' : 'Unverified Buzzword'}
+                </span>
+              </div>
+              <p class="text-slate-300 font-sans leading-relaxed">${escapeHtml(sc.rationale)}</p>
+              <div class="p-2.5 rounded-lg bg-dark-900/60 font-mono text-[11px] text-slate-400 space-y-1">
+                <div><strong>Q1 (Arch):</strong> ${escapeHtml(sc.question_1)} <span class="text-blue-400">(${sc.verdict_1})</span></div>
+                ${sc.question_2 ? `<div><strong>Q2 (Trade-off):</strong> ${escapeHtml(sc.question_2)} <span class="text-blue-400">(${sc.verdict_2})</span></div>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 3. Combined Chronological Turns
       const turnsContainer = document.getElementById('report-turns-container');
-      turnsContainer.innerHTML = report.turns.map(t => {
+      const allTurns = dossier.primary_skills_reports.flatMap(r => r.turns);
+      turnsContainer.innerHTML = allTurns.map(t => {
         let verdictStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
         if (t.verdict === 'correct') verdictStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
         else if (t.verdict === 'partial') verdictStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
@@ -672,16 +781,14 @@
 
         return `
           <div class="p-4 rounded-xl bg-dark-800 border border-dark-600/60 space-y-3 font-sans text-xs">
-            <!-- Turn Header -->
             <div class="flex items-center justify-between font-mono">
               <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-bold">Turn ${t.turn_number} (${t.depth_level})</span>
+                <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-bold">${escapeHtml(t.skill_name || 'Skill')} - Turn ${t.turn_number} (${t.depth_level})</span>
                 <span class="text-slate-500">Rubric: ${escapeHtml(t.rubric_id)}</span>
               </div>
               <span class="px-2 py-0.5 rounded border uppercase font-bold ${verdictStyle}">Verdict: ${t.verdict}</span>
             </div>
 
-            <!-- Question & Answer -->
             <div class="space-y-1.5">
               <p class="text-slate-200 font-semibold">Q: ${escapeHtml(t.question_text)}</p>
               <div class="p-2.5 rounded-lg bg-dark-900/60 text-slate-300 border border-dark-600/40 italic">
@@ -689,12 +796,10 @@
               </div>
             </div>
 
-            <!-- Grader Rationale -->
             <div class="text-slate-400">
               <strong class="text-slate-300">Grader Rationale:</strong> ${escapeHtml(t.rationale)}
             </div>
 
-            <!-- BKT Math & Trace Footer -->
             <div class="pt-2 border-t border-dark-600/40 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
               <div class="flex items-center gap-3">
                 <span class="text-slate-400">Prior: <strong>${t.prior_mastery.toFixed(4)}</strong></span>
@@ -718,33 +823,43 @@
     }
 
     function copyReportMarkdown() {
-      if (!currentReport) return;
-      let md = `# Candidate Assessment & Audit Dossier: ${currentReport.skill}\n\n`;
-      md += `- **Final Status:** ${currentReport.final_state}\n`;
-      md += `- **Certified Mastery:** ${(currentReport.final_mastery * 100).toFixed(1)}%\n`;
-      md += `- **Devil's Advocate:** ${currentReport.da_triggered ? (currentReport.da_defended ? 'Defended' : 'Failed') : 'Not Triggered'}\n\n`;
-      md += `### Summary\n${currentReport.summary_headline}\n\n`;
-      md += `### Turn-by-Turn Evidence Trail\n\n`;
+      if (!currentDossier) return;
+      let md = `# Candidate Multi-Skill Assessment Dossier\n\n`;
+      md += `### Executive Summary\n${currentDossier.executive_summary}\n\n`;
+      
+      md += `### 1. Primary Assessed Skills\n`;
+      currentDossier.primary_skills_reports.forEach(r => {
+        md += `- **${r.skill}**: ${r.final_state} (${(r.final_mastery * 100).toFixed(1)}% Mastery) | Devil's Advocate: ${r.da_triggered ? (r.da_defended ? 'Defended' : 'Failed') : 'N/A'}\n`;
+      });
+      md += `\n`;
 
-      currentReport.turns.forEach(t => {
-        md += `#### Turn ${t.turn_number} (${t.depth_level}) - Verdict: ${t.verdict.toUpperCase()}\n`;
-        md += `**Question:** ${t.question_text}\n\n`;
-        md += `**Candidate Answer:** "${t.candidate_answer}"\n\n`;
-        md += `**Grader Rationale:** ${t.rationale}\n\n`;
-        md += `**BKT Math:** Prior ${t.prior_mastery.toFixed(4)} -> Posterior ${t.posterior.toFixed(4)} -> Next Mastery ${t.next_mastery.toFixed(4)} (Delta: ${t.delta >= 0 ? '+' : ''}${t.delta.toFixed(4)})\n\n`;
-        md += `**Route:** ${t.policy_action} | **Trace:** ${t.pipeline_trace.join(' -> ')}\n\n---\n\n`;
+      if (currentDossier.spot_check_records && currentDossier.spot_check_records.length > 0) {
+        md += `### 2. In-Flight Spot-Check Probes (Hands-On Verification)\n`;
+        currentDossier.spot_check_records.forEach(sc => {
+          md += `- **${sc.skill_name}**: ${sc.final_verdict} - ${sc.rationale}\n`;
+        });
+        md += `\n`;
+      }
+
+      md += `### 3. Chronological Turn Evidence Trail\n\n`;
+      currentDossier.primary_skills_reports.forEach(r => {
+        md += `#### Skill: ${r.skill}\n\n`;
+        r.turns.forEach(t => {
+          md += `##### Turn ${t.turn_number} (${t.depth_level}) - Verdict: ${t.verdict.toUpperCase()}\n`;
+          md += `**Question:** ${t.question_text}\n\n`;
+          md += `**Candidate Answer:** "${t.candidate_answer}"\n\n`;
+          md += `**Grader Rationale:** ${t.rationale}\n\n`;
+          md += `**BKT Math:** Prior ${t.prior_mastery.toFixed(4)} -> Posterior ${t.posterior.toFixed(4)} -> Next Mastery ${t.next_mastery.toFixed(4)} (Delta: ${t.delta >= 0 ? '+' : ''}${t.delta.toFixed(4)})\n\n`;
+          md += `**Route:** ${t.policy_action}\n\n---\n\n`;
+        });
       });
 
       navigator.clipboard.writeText(md).then(() => {
-        alert('Audit Dossier copied to clipboard as Markdown!');
+        alert('Multi-Skill Dossier copied to clipboard as Markdown!');
       });
     }
 
-
-    // Initialize Connection on Load
     window.addEventListener('DOMContentLoaded', connectWebSocket);
   </script>
-
-
 </body>
 </html>
