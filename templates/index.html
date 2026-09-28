@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Adaptive Multi-Skill Interview Engine | BKT & Rubric-Lock</title>
+  <title>AI Interview Platform | Adaptive Multi-Skill Engine v2</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -11,11 +11,10 @@
   <!-- Modern Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
@@ -23,11 +22,12 @@
             mono: ['"JetBrains Mono"', 'monospace'],
           },
           colors: {
-            dark: {
-              900: '#07090E',
-              800: '#0E131F',
-              700: '#161D2F',
-              600: '#232D45',
+            brand: {
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
             }
           }
         }
@@ -36,100 +36,176 @@
   </script>
 
   <style>
-    /* Custom Scrollbars */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #07090E; }
-    ::-webkit-scrollbar-thumb { background: #232D45; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #3B82F6; }
+    /* Custom Slim Scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f8fafc; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
     /* Pulse Glow Animations */
-    @keyframes pulse-glow {
+    @keyframes pulse-dot {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(1.05); }
+      50% { opacity: 0.5; transform: scale(1.15); }
     }
-    .glow-live { animation: pulse-glow 2s infinite ease-in-out; }
-    
-    @keyframes da-pulse {
-      0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
-      50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.7); }
-    }
-    .da-alert { animation: da-pulse 1.8s infinite ease-in-out; }
+    .glow-live { animation: pulse-dot 1.8s infinite ease-in-out; }
 
-    @keyframes spot-pulse {
-      0%, 100% { box-shadow: 0 0 12px rgba(6, 182, 212, 0.4); }
-      50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.6); }
+    @keyframes da-soft-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.2); }
+      50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.15); }
     }
-    .spot-alert { animation: spot-pulse 1.6s infinite ease-in-out; }
+    .da-alert-banner { animation: da-soft-pulse 2s infinite ease-in-out; }
+
+    /* Prevent document body from bouncing or scrolling beyond 100vh */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
   </style>
 </head>
 
-<body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
+<body class="bg-slate-100/90 text-slate-800 font-sans h-screen flex flex-col antialiased selection:bg-teal-500 selection:text-white">
 
-  <!-- TOP HEADER -->
-  <header class="h-16 border-b border-dark-600/60 bg-dark-800/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-50">
-    <div class="flex items-center gap-3">
-      <span class="px-2.5 py-1 text-xs font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded-md">POC v2</span>
-      <h1 class="text-base font-semibold text-slate-200">
-        Adaptive Interview Engine <span class="text-slate-500 font-normal">/ Multi-Skill Queue & Spot-Check Interceptor</span>
-      </h1>
+  <!-- ========================================================================= -->
+  <!-- TOP NAVIGATION HEADER (Light Theme with Real-Time Telemetry Badges) -->
+  <!-- ========================================================================= -->
+  <header class="h-16 border-b border-slate-200/90 bg-white/95 backdrop-blur-md px-6 flex items-center justify-between shrink-0 z-30 shadow-xs">
+    
+    <!-- Left: Brand Title & Candidate Context -->
+    <div class="flex items-center gap-3.5">
+      <div class="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200/70 flex items-center justify-center text-teal-700 font-bold text-sm shadow-xs">
+        AI
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm font-bold text-slate-900 tracking-tight">AI Interview Platform</h1>
+          <span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200/80 rounded-full">v2 Engine</span>
+        </div>
+        <p class="text-[11px] text-slate-500">Adaptive Multi-Skill Assessment &middot; BKT &middot; Rubric-Lock</p>
+      </div>
     </div>
 
-    <!-- WebSocket Connection Status -->
-    <div class="flex items-center gap-2.5 text-xs font-mono">
-      <span id="ws-indicator" class="w-2.5 h-2.5 rounded-full bg-amber-400 glow-live"></span>
-      <span id="ws-status" class="text-slate-400">Connecting to WebSocket...</span>
+    <!-- Right: Real-Time Financial & Operational Telemetry -->
+    <div class="flex items-center gap-3 text-xs">
+      
+      <!-- Live Session Stopwatch -->
+      <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-mono font-medium shadow-2xs">
+        <span class="text-slate-400">⏱️</span>
+        <span id="session-timer">00:00</span>
+      </div>
+
+      <!-- Live Token Burn Counter -->
+      <div class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 font-mono font-medium shadow-2xs">
+        <span class="text-amber-500 font-bold">🪙</span>
+        <span id="total-tokens-badge">0 tokens</span>
+      </div>
+
+      <!-- Live Estimated Cost in USD -->
+      <div class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg font-mono font-bold shadow-2xs">
+        <span>💵</span>
+        <span id="estimated-cost-badge">$0.0000</span>
+      </div>
+
+      <!-- Live Gemini LLM Calls Counter -->
+      <div class="hidden md:flex items-center gap-1.5 px-3 py-1.5 bg-cyan-50 border border-cyan-200 text-cyan-800 rounded-lg font-mono text-xs shadow-2xs" title="Total Gemini LLM API Calls">
+        <span>🤖</span>
+        <span id="gemini-calls-badge">0 LLM calls</span>
+      </div>
+
+      <!-- WebSocket Live Connection Indicator -->
+      <div class="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-2xs font-mono text-[11px]">
+        <span id="ws-indicator" class="w-2.5 h-2.5 rounded-full bg-amber-400 glow-live"></span>
+        <span id="ws-status" class="text-slate-600 font-medium">Connecting...</span>
+      </div>
+
+      <!-- Candidate Avatar Badge -->
+      <div class="flex items-center gap-2 pl-2 border-l border-slate-200">
+        <div id="candidate-avatar" class="w-8 h-8 rounded-full bg-gradient-to-tr from-teal-500 to-emerald-400 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+          C
+        </div>
+        <div class="hidden sm:block text-left">
+          <span id="candidate-name-badge" class="block text-xs font-semibold text-slate-800 leading-none">Candidate</span>
+          <span class="text-[10px] text-teal-600 font-medium">Evaluation Active</span>
+        </div>
+      </div>
     </div>
   </header>
 
-  <!-- MAIN SPLIT WORKSPACE -->
+  <!-- ========================================================================= -->
+  <!-- MAIN WORKSPACE: FIXED VIEWPORT SPLIT (100vh - 4rem) -->
+  <!-- Chat and Inspector have independent internal scrolling so user never loses sight -->
+  <!-- ========================================================================= -->
   <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden" style="height: calc(100vh - 4rem);">
 
-    <!-- LEFT PANEL: CANDIDATE INTERVIEW ROOM (7 Columns) -->
-    <section class="lg:col-span-7 flex flex-col border-r border-dark-600/60 bg-dark-900">
+    <!-- ======================================================================= -->
+    <!-- LEFT PANEL: CANDIDATE INTERVIEW ROOM (7 Cols) -->
+    <!-- Fixed container: top queue bar + middle scrollable chat + bottom input -->
+    <!-- ======================================================================= -->
+    <section class="lg:col-span-7 flex flex-col h-full bg-white border-r border-slate-200/90 overflow-hidden">
       
-      <!-- Panel Bar: Dynamic Skill Queue Bar -->
-      <div class="h-14 px-6 border-b border-dark-600/40 bg-dark-800/40 flex items-center justify-between gap-4">
+      <!-- Panel Header Bar: Dynamic Skill Queue Progress Bar -->
+      <div class="h-14 px-6 border-b border-slate-200/80 bg-slate-50/80 flex items-center justify-between gap-4 shrink-0">
         <div class="flex items-center gap-2.5 overflow-x-auto py-1">
-          <span class="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold shrink-0">Skill Queue:</span>
+          <span class="text-[11px] font-mono uppercase tracking-wider text-slate-500 font-bold shrink-0">Skill Queue:</span>
           <div id="skill-queue-container" class="flex items-center gap-1.5 font-mono text-xs">
-            <span class="px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold">Intro</span>
+            <span class="px-2.5 py-1 rounded-md bg-teal-100/70 text-teal-800 border border-teal-300/60 font-semibold shadow-2xs">
+              Introduction
+            </span>
           </div>
         </div>
         
-        <!-- Spot Check In-Flight Alert Badge -->
-        <div id="spot-check-badge" class="hidden px-2.5 py-1 text-xs font-bold font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 rounded-full flex items-center gap-1.5 spot-alert shrink-0">
+        <!-- In-Flight Spot-Check Alert Badge -->
+        <div id="spot-check-badge" class="hidden px-3 py-1 text-xs font-bold font-mono bg-cyan-50 text-cyan-800 border border-cyan-300 rounded-full flex items-center gap-1.5 shadow-xs shrink-0">
           <span>⚡</span>
           <span id="spot-check-badge-text">Spot-Check Probe</span>
         </div>
       </div>
 
-      <!-- Live Chat Transcript Area -->
-      <div id="chat-box" class="flex-1 overflow-y-auto p-6 space-y-5">
+      <!-- Live Chat Message Area (STRICT INTERNAL SCROLLING) -->
+      <!-- Only this element scrolls as conversation grows; right panel stays pinned! -->
+      <div id="chat-box" class="flex-1 min-h-0 overflow-y-auto p-6 space-y-5 bg-slate-50/40">
         <!-- Messages dynamically injected here -->
       </div>
 
-      <!-- Live Engine Activity Bar (Hidden by default) -->
-      <div id="engine-activity" class="hidden px-6 py-2 bg-blue-950/30 border-t border-blue-500/20 text-xs font-mono text-blue-300 flex items-center gap-3">
-        <span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-        <span id="engine-activity-text">Evaluating answer against frozen rubric...</span>
+      <!-- Live Engine Background Activity Status Bar (Hidden until active) -->
+      <div id="engine-activity" class="hidden px-6 py-2.5 bg-teal-50/90 border-t border-teal-200/70 text-xs font-mono text-teal-900 flex items-center gap-2.5 shrink-0 shadow-inner">
+        <span class="w-2 h-2 rounded-full bg-teal-500 animate-ping"></span>
+        <span id="engine-activity-text">Evaluating response against locked rubric...</span>
       </div>
 
-      <!-- Candidate Input Box -->
-      <div class="p-4 border-t border-dark-600/60 bg-dark-800/50">
-        <div class="relative rounded-xl border border-dark-600/80 bg-dark-900 focus-within:border-blue-500/60 transition-colors p-3 shadow-inner">
+      <!-- Candidate Input Box (Fixed at Bottom of Interview Room) -->
+      <div class="p-4 border-t border-slate-200/90 bg-white shrink-0">
+        <div class="rounded-xl border border-slate-300 bg-white focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-100 transition-all p-3 shadow-xs">
           <textarea 
             id="candidate-input" 
             rows="3" 
-            placeholder="Type your response here... (e.g., introduction or technical architectural explanation)"
-            class="w-full bg-transparent text-sm text-slate-200 placeholder-slate-500 focus:outline-none resize-none font-sans"
+            placeholder="Type your technical response here... (e.g., share your engineering background or explain system design trade-offs)"
+            class="w-full bg-transparent text-sm text-slate-800 placeholder-slate-400 focus:outline-none resize-none font-sans"
           ></textarea>
           
-          <div class="flex items-center justify-between pt-2 border-t border-dark-600/40 mt-1">
-            <span class="text-[11px] text-slate-500 font-mono">Ctrl + Enter to send</span>
+          <div class="flex items-center justify-between pt-2.5 border-t border-slate-100 mt-1">
+            <div class="flex items-center gap-3">
+              <button 
+                id="mic-btn" 
+                type="button"
+                onclick="toggleSpeechRecognition()"
+                class="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                title="Click to speak your answer using microphone"
+              >
+                <span id="mic-icon" class="text-sm">🎙️</span>
+                <span id="mic-label">Speak</span>
+              </button>
+              <span id="mic-status" class="hidden text-xs font-mono text-rose-600 animate-pulse flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+                <span>Listening... speak now</span>
+              </span>
+              <span class="hidden sm:inline-flex text-[11px] text-slate-400 font-mono items-center gap-1">
+                <span>⌨️</span> <span>Press <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] text-slate-600 font-bold">Ctrl</kbd> + <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] text-slate-600 font-bold">Enter</kbd> to send</span>
+              </span>
+            </div>
             <button 
               id="submit-btn" 
               onclick="submitAnswer()"
-              class="px-4 py-1.5 text-xs font-semibold font-mono bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all shadow-md hover:shadow-blue-500/20 flex items-center gap-1.5"
+              class="px-5 py-2 text-xs font-bold font-mono bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-lg transition-all shadow-sm hover:shadow-teal-500/20 flex items-center gap-2"
             >
               <span>Submit Answer</span>
               <span>→</span>
@@ -139,26 +215,32 @@
       </div>
     </section>
 
-    <!-- RIGHT PANEL: BKT TELEMETRY & RUBRIC-LOCK INSPECTOR (5 Columns) -->
-    <section class="lg:col-span-5 flex flex-col bg-dark-800/30 overflow-y-auto p-6 space-y-5">
+    <!-- ======================================================================= -->
+    <!-- RIGHT PANEL: BKT TELEMETRY & ENGINE INSPECTOR (5 Cols) -->
+    <!-- Pinned in view with independent scroll if screen height is constrained -->
+    <!-- ======================================================================= -->
+    <section id="inspector-panel" class="lg:col-span-5 flex flex-col h-full bg-slate-50/70 overflow-y-auto p-5 space-y-4">
       
-      <!-- Telemetry Meta Bar -->
-      <div class="flex items-center justify-between pb-3 border-b border-dark-600/40">
-        <h2 class="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold">Behind-the-Curtain Inspector</h2>
-        <div class="flex items-center gap-2 font-mono text-xs">
-          <span id="depth-badge" class="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded">Depth: L1</span>
-          <span id="attempts-badge" class="px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded">Attempts: 0/4</span>
-          <span id="state-badge" class="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded font-bold">IN_PROGRESS</span>
+      <!-- Telemetry Status Meta Bar -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h2 class="text-xs font-mono uppercase tracking-wider text-slate-600 font-bold">Behind-the-Curtain Inspector</h2>
+          <p class="text-[11px] text-slate-500 mt-0.5">Real-time Bayesian evaluation & rubric compliance</p>
+        </div>
+        <div class="flex items-center gap-1.5 font-mono text-xs">
+          <span id="depth-badge" class="px-2 py-0.5 bg-teal-50 text-teal-800 border border-teal-200 rounded font-semibold">Depth: L1</span>
+          <span id="attempts-badge" class="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded">Attempts: 0/4</span>
+          <span id="state-badge" class="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded font-bold">IN_PROGRESS</span>
         </div>
       </div>
 
-      <!-- Devil's Advocate Alert Banner (Hidden until triggered) -->
-      <div id="da-banner" class="hidden rounded-xl border border-amber-500/60 bg-amber-950/30 p-4 da-alert">
+      <!-- Devil's Advocate Alert Banner (Light Themed, Hidden until triggered) -->
+      <div id="da-banner" class="hidden rounded-xl border border-amber-300 bg-amber-50/90 p-4 da-alert-banner shadow-xs">
         <div class="flex items-start gap-3">
           <span class="text-2xl">⚠️</span>
           <div>
-            <h4 class="text-sm font-bold text-amber-300 font-mono">Devil's Advocate Triggered!</h4>
-            <p id="da-reason" class="text-xs text-amber-200/80 mt-1 leading-relaxed">
+            <h4 class="text-xs font-bold text-amber-900 font-mono uppercase tracking-wide">Devil's Advocate Active!</h4>
+            <p id="da-reason" class="text-xs text-amber-800 mt-1 leading-relaxed">
               Steep mastery surge on advanced level detected. Candidate is forced to defend design trade-offs.
             </p>
           </div>
@@ -166,92 +248,92 @@
       </div>
 
       <!-- PILLAR 1: RUBRIC-LOCK ("The Law") -->
-      <div class="rounded-xl border border-dark-600/80 bg-dark-800/70 p-4 shadow-sm">
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-dark-600/40">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
           <div>
-            <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-blue-400">Pillar 1: Rubric-Lock <span class="text-slate-500">("The Law")</span></h3>
-            <p class="text-[11px] text-slate-500 mt-0.5">Frozen in memory before question dispatch. Criteria cannot soften.</p>
+            <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-teal-700">Pillar 1: Rubric-Lock <span class="text-slate-400">("The Law")</span></h3>
+            <p class="text-[11px] text-slate-500 mt-0.5">Frozen criteria generated before question dispatch.</p>
           </div>
-          <span id="rubric-id" class="px-2 py-0.5 text-[11px] font-mono bg-dark-700 text-slate-300 border border-dark-600 rounded">RUB-WAITING</span>
+          <span id="rubric-id" class="px-2 py-0.5 text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200 rounded font-bold">RUB-WAITING</span>
         </div>
 
         <!-- Required Criteria Checklist -->
-        <div class="space-y-2 mb-3">
-          <span class="text-[11px] font-mono text-emerald-400 font-bold uppercase tracking-wider">Required Criteria (Must hit):</span>
-          <ul id="required-list" class="space-y-1.5 text-xs text-slate-300">
-            <li class="text-slate-500 italic">Waiting for initial question...</li>
+        <div class="space-y-1.5 mb-3">
+          <span class="text-[10px] font-mono text-emerald-700 font-bold uppercase tracking-wider block">Required Criteria (Must Articulate):</span>
+          <ul id="required-list" class="space-y-1.5 text-xs text-slate-700">
+            <li class="text-slate-400 italic">Waiting for initial prompt...</li>
           </ul>
         </div>
 
         <!-- Prohibited Misconceptions -->
-        <div class="space-y-2 pt-2 border-t border-dark-600/30">
-          <span class="text-[11px] font-mono text-rose-400 font-bold uppercase tracking-wider">Prohibited Misconceptions (Disqualifiers):</span>
-          <ul id="prohibited-list" class="space-y-1.5 text-xs text-slate-300">
-            <li class="text-slate-500 italic">Waiting for initial question...</li>
+        <div class="space-y-1.5 pt-2.5 border-t border-slate-100">
+          <span class="text-[10px] font-mono text-rose-700 font-bold uppercase tracking-wider block">Disqualifiers (Prohibited Misconceptions):</span>
+          <ul id="prohibited-list" class="space-y-1.5 text-xs text-slate-700">
+            <li class="text-slate-400 italic">None specified</li>
           </ul>
         </div>
       </div>
 
       <!-- PILLAR 2: BKT MATH ENGINE ("The Memory") -->
-      <div class="rounded-xl border border-dark-600/80 bg-dark-800/70 p-4 shadow-sm">
-        <div class="flex items-center justify-between pb-2 mb-3 border-b border-dark-600/40">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-100">
           <div>
-            <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-indigo-400">Pillar 2: BKT Math <span class="text-slate-500">("The Memory")</span></h3>
+            <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-blue-700">Pillar 2: BKT Math <span class="text-slate-400">("The Memory")</span></h3>
             <p class="text-[11px] text-slate-500 mt-0.5">Continuous latent mastery probability P(L) updated via Bayes' rule.</p>
           </div>
-          <span id="turn-badge" class="px-2 py-0.5 text-[11px] font-mono bg-dark-700 text-indigo-300 border border-dark-600 rounded">Turn 0</span>
+          <span id="turn-badge" class="px-2 py-0.5 text-[10px] font-mono bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold">Turn 0</span>
         </div>
 
-        <!-- Animated Mastery Meter -->
-        <div class="mb-4">
-          <div class="flex justify-between text-xs font-mono mb-1.5">
-            <span class="text-slate-400">Active Skill Mastery P(L):</span>
-            <span id="mastery-pct" class="font-bold text-blue-400">30.0%</span>
+        <!-- Visual Mastery Percentage & Progress Bar -->
+        <div class="mb-3.5 bg-slate-50/80 p-3 rounded-lg border border-slate-200/80">
+          <div class="flex justify-between items-center text-xs font-mono mb-1.5">
+            <span class="text-slate-600 font-medium">Active Skill Mastery P(L):</span>
+            <span id="mastery-pct" class="font-bold text-sm text-teal-700">30.0%</span>
           </div>
-          <div class="w-full h-3 rounded-full bg-dark-900 border border-dark-600/80 overflow-hidden p-0.5">
-            <div id="mastery-bar" class="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700" style="width: 30%;"></div>
+          <div class="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden">
+            <div id="mastery-bar" class="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700" style="width: 30%;"></div>
           </div>
         </div>
 
-        <!-- Math Parameter Grid -->
+        <!-- 6-Metric Parameter Grid -->
         <div class="grid grid-cols-3 gap-2 font-mono text-xs">
-          <div class="bg-dark-900/80 p-2.5 rounded-lg border border-dark-600/40">
+          <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
             <span class="text-[10px] text-slate-500 block">Prior P(L)</span>
-            <span id="math-prior" class="font-bold text-slate-200">0.3000</span>
+            <span id="math-prior" class="font-bold text-slate-800">0.3000</span>
           </div>
-          <div class="bg-dark-900/80 p-2.5 rounded-lg border border-dark-600/40">
+          <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
             <span class="text-[10px] text-slate-500 block">Guess P(G)</span>
-            <span id="math-guess" class="font-bold text-slate-200">0.3000</span>
+            <span id="math-guess" class="font-bold text-slate-800">0.3000</span>
           </div>
-          <div class="bg-dark-900/80 p-2.5 rounded-lg border border-dark-600/40">
+          <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
             <span class="text-[10px] text-slate-500 block">Slip P(S)</span>
-            <span id="math-slip" class="font-bold text-slate-200">0.0500</span>
+            <span id="math-slip" class="font-bold text-slate-800">0.0500</span>
           </div>
-          <div class="bg-dark-900/80 p-2.5 rounded-lg border border-dark-600/40">
+          <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
             <span class="text-[10px] text-slate-500 block">Posterior P(L|obs)</span>
-            <span id="math-posterior" class="font-bold text-slate-200">--</span>
+            <span id="math-posterior" class="font-bold text-slate-800">--</span>
           </div>
-          <div class="bg-dark-900/80 p-2.5 rounded-lg border border-dark-600/40">
+          <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
             <span class="text-[10px] text-slate-500 block">Learn P(T)</span>
-            <span id="math-learn" class="font-bold text-slate-200">0.0500</span>
+            <span id="math-learn" class="font-bold text-slate-800">0.0500</span>
           </div>
-          <div class="bg-indigo-950/40 p-2.5 rounded-lg border border-indigo-500/40">
-            <span class="text-[10px] text-indigo-400 block font-bold">New Mastery</span>
-            <span id="math-new-mastery" class="font-bold text-indigo-300">0.3000</span>
+          <div class="bg-teal-50 p-2 rounded-lg border border-teal-200">
+            <span class="text-[10px] text-teal-700 block font-bold">New Mastery</span>
+            <span id="math-new-mastery" class="font-bold text-teal-800">0.3000</span>
           </div>
         </div>
 
         <!-- Delta Turn Pill -->
-        <div id="delta-container" class="hidden mt-3 p-2 bg-dark-900/50 rounded-md border border-dark-600/40 flex items-center justify-between text-xs font-mono">
-          <span class="text-slate-400">Mastery Delta this turn:</span>
-          <span id="delta-val" class="font-bold">+0.0000</span>
+        <div id="delta-container" class="hidden mt-2.5 p-2 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs font-mono">
+          <span class="text-slate-600">Mastery Delta this turn:</span>
+          <span id="delta-val" class="font-bold text-emerald-600">+0.0000</span>
         </div>
       </div>
 
-      <!-- PILLAR 3: POLICY & DECISION -->
-      <div class="rounded-xl border border-dark-600/80 bg-dark-800/70 p-4 shadow-sm">
-        <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-emerald-400 mb-1">Policy Engine Routing</h3>
-        <p id="policy-reason" class="text-xs text-slate-300 font-sans leading-relaxed">
+      <!-- PILLAR 3: POLICY & DECISION ROUTING -->
+      <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+        <h3 class="text-xs font-bold font-mono uppercase tracking-wide text-emerald-700 mb-1">Pillar 3: Policy Engine Routing</h3>
+        <p id="policy-reason" class="text-xs text-slate-600 leading-relaxed font-sans">
           Session initialized. Presenting candidate with introduction prompt to build the dynamic skill queue.
         </p>
       </div>
@@ -259,54 +341,109 @@
     </section>
   </main>
 
-  <!-- FINAL AUDIT REPORT MODAL (Hidden by default) -->
-  <div id="report-modal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
-    <div class="bg-dark-900 border border-dark-600/80 rounded-2xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+  <!-- FLOATING ACTION BUTTON: LIVE IN-FLIGHT REPORT -->
+  <div class="fixed bottom-6 right-6 z-40">
+    <button 
+      id="current-report-fab"
+      onclick="openCurrentReportModal()"
+      class="flex items-center gap-2.5 px-4 py-2.5 bg-white text-slate-800 border border-slate-300 rounded-full shadow-lg hover:shadow-xl hover:border-teal-500 hover:text-teal-700 active:scale-95 transition-all font-mono text-xs font-bold cursor-pointer group"
+      title="View live detailed candidate report so far"
+    >
+      <span class="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
+      <span>📊 Current Report</span>
+      <span id="fab-turns-badge" class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] rounded-full font-mono group-hover:bg-teal-50 group-hover:text-teal-700">0 turns</span>
+    </button>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- FINAL CERTIFIED CANDIDATE DOSSIER MODAL (Light Theme & Concise Views) -->
+  <!-- Truncated question snippets with expandable details to avoid text walls -->
+  <!-- ========================================================================= -->
+  <div id="report-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
       
       <!-- Modal Header -->
-      <div class="p-6 border-b border-dark-600/60 bg-dark-800/60 flex items-center justify-between">
+      <div class="p-6 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between">
         <div>
-          <span class="px-2.5 py-0.5 text-[11px] font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded">Certified Master Dossier</span>
-          <h2 class="text-xl font-bold text-white mt-1" id="report-headline-title">Multi-Skill Candidate Assessment Report</h2>
+          <span class="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200 rounded-full">Certified Assessment Dossier</span>
+          <h2 class="text-lg font-bold text-slate-900 mt-1" id="report-headline-title">Multi-Skill Candidate Assessment Report</h2>
         </div>
-        <div class="flex items-center gap-3">
-          <button onclick="copyReportMarkdown()" class="px-3 py-1.5 text-xs font-mono bg-dark-700 hover:bg-dark-600 text-slate-200 border border-dark-600 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-            <span>📋 Copy Markdown Dossier</span>
+        <div class="flex items-center gap-2.5">
+          <button onclick="copyReportMarkdown()" class="px-3 py-1.5 text-xs font-mono font-semibold bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs">
+            <span>📋 Copy Markdown</span>
           </button>
-          <button onclick="closeReportModal()" class="w-8 h-8 rounded-lg bg-dark-700 hover:bg-dark-600 text-slate-400 hover:text-white flex items-center justify-center font-mono">
+          <button onclick="closeReportModal()" class="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-500 hover:text-slate-800 border border-slate-200 flex items-center justify-center font-mono">
             ✕
           </button>
         </div>
       </div>
 
       <!-- Modal Body (Scrollable) -->
-      <div class="p-6 overflow-y-auto space-y-6 flex-1">
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/30">
         
+        <!-- Executive KPI Cards Grid (Efficiency & Outcomes) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs text-center">
+            <span class="text-[10px] text-slate-500 font-mono uppercase block">Session Duration</span>
+            <span id="modal-duration" class="text-sm font-bold text-slate-800 font-mono mt-0.5 block">00:00</span>
+          </div>
+          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs text-center">
+            <span class="text-[10px] text-slate-500 font-mono uppercase block">Total Tokens</span>
+            <span id="modal-tokens" class="text-sm font-bold text-slate-800 font-mono mt-0.5 block">0</span>
+          </div>
+          <div class="bg-white p-3 rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-2xs text-center">
+            <span class="text-[10px] text-emerald-700 font-mono uppercase block">Total API Cost</span>
+            <span id="modal-cost" class="text-sm font-bold text-emerald-800 font-mono mt-0.5 block">$0.0000</span>
+          </div>
+          <div class="bg-white p-3 rounded-xl border border-teal-200 bg-teal-50/30 shadow-2xs text-center">
+            <span class="text-[10px] text-teal-700 font-mono uppercase block">Skills Verified</span>
+            <span id="modal-verified-count" class="text-sm font-bold text-teal-800 font-mono mt-0.5 block">0 Verified</span>
+          </div>
+          <div class="bg-white p-3 rounded-xl border border-indigo-200 bg-indigo-50/30 shadow-2xs text-center">
+            <span class="text-[10px] text-indigo-700 font-mono uppercase block">Backend Invocations</span>
+            <span id="modal-backend-calls" class="text-sm font-bold text-indigo-800 font-mono mt-0.5 block">0 Calls</span>
+          </div>
+          <div class="bg-white p-3 rounded-xl border border-cyan-200 bg-cyan-50/30 shadow-2xs text-center">
+            <span class="text-[10px] text-cyan-700 font-mono uppercase block">Gemini LLM Calls</span>
+            <span id="modal-gemini-calls" class="text-sm font-bold text-cyan-800 font-mono mt-0.5 block">0 Calls</span>
+          </div>
+        </div>
+
         <!-- Executive Headline Banner -->
-        <div class="p-4 rounded-xl bg-dark-800/60 border border-dark-600/60 text-sm text-slate-200 leading-relaxed font-sans" id="report-headline">
+        <div class="p-4 rounded-xl bg-white border border-slate-200 text-xs text-slate-700 leading-relaxed font-sans shadow-2xs" id="report-headline">
           Candidate technical evaluation concluded. Review certified competencies and spot-check evidence below.
         </div>
 
         <!-- Section 1: Primary Skills Evaluation Grid -->
-        <div class="space-y-3">
-          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">1. Primary Assessed Skills (BKT + Rubric-Lock)</h3>
+        <div class="space-y-2.5">
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-teal-800 flex items-center gap-1.5">
+            <span>🎯</span> <span>1. Primary Assessed Skills (BKT + Rubric-Lock)</span>
+          </h3>
           <div id="primary-skills-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <!-- Dynamic primary skill cards injected here -->
           </div>
         </div>
 
         <!-- Section 2: In-Flight Spot-Check Probes -->
-        <div class="space-y-3">
-          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-cyan-400">2. In-Flight Spot-Check Probes (Hands-On vs. Buzzword Detection)</h3>
-          <div id="spot-checks-container" class="space-y-3">
+        <div class="space-y-2.5">
+          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-cyan-800 flex items-center gap-1.5">
+            <span>⚡</span> <span>2. In-Flight Spot-Check Probes (Hands-On vs. Buzzword Detection)</span>
+          </h3>
+          <div id="spot-checks-container" class="space-y-2.5">
             <!-- Dynamic spot check cards injected here -->
           </div>
         </div>
 
-        <!-- Section 3: Chronological Turn Evidence Trail -->
-        <div class="space-y-4 pt-2 border-t border-dark-600/40">
-          <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-slate-400">3. Chronological Turn Evidence & Math Audit</h3>
-          <div id="report-turns-container" class="space-y-4">
+        <!-- Section 3: Chronological Turn Evidence Trail (Concise & Truncated Questions) -->
+        <div class="space-y-3 pt-3 border-t border-slate-200">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <span>📜</span> <span>3. Chronological Audit Trail</span>
+            </h3>
+            <span class="text-[11px] text-slate-500 font-mono">Questions summarized for clean readability</span>
+          </div>
+          <div id="report-turns-container" class="space-y-3">
             <!-- Dynamic turn cards injected here -->
           </div>
         </div>
@@ -314,9 +451,9 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="p-4 border-t border-dark-600/60 bg-dark-800/40 flex items-center justify-between">
-        <span class="text-xs font-mono text-slate-500">Bayesian Knowledge Tracing (Corbett & Anderson 1994) + Rubric-Lock Certified</span>
-        <button onclick="location.reload()" class="px-4 py-2 text-xs font-mono bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors font-bold">
+      <div class="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <span class="text-xs font-mono text-slate-500">Bayesian Knowledge Tracing (Corbett & Anderson 1994) Certified</span>
+        <button onclick="location.reload()" class="px-4 py-2 text-xs font-mono bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-lg transition-colors font-bold shadow-xs">
           Start New Assessment
         </button>
       </div>
@@ -324,11 +461,53 @@
     </div>
   </div>
 
-  <!-- WEBSOCKET CLIENT SCRIPT -->
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT: WEBSOCKET ORCHESTRATION & TELEMETRY SYNC -->
+  <!-- ========================================================================= -->
   <script>
     let socket = null;
     let currentDossier = null;
-    let singleSkillReport = null;
+    let timerInterval = null;
+    let sessionSeconds = 0;
+    // Real-Time In-Flight State
+    let inFlightSession = {
+      candidateName: null,
+      totalBackendCalls: 0,
+      totalGeminiCalls: 0,
+      activeSkill: 'Introduction',
+      activeDepth: 'L1',
+      activeMastery: 0.30,
+      activeAttempts: 0,
+      hasFacedDA: false,
+      daDefended: false,
+      queuedSkills: [],
+      completedSkills: [],
+      completedSkillReports: [],
+      spotCheckRecords: [],
+      turnsHistory: [],
+      totalTokens: 0,
+      estimatedCost: 0.0,
+      lastQuestionText: '',
+      isCompleted: false
+    };
+
+
+    // Start Real-Time Session Timer
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      sessionSeconds = 0;
+      timerInterval = setInterval(() => {
+        sessionSeconds++;
+        updateTimerDisplay(sessionSeconds);
+      }, 1000);
+    }
+
+    function updateTimerDisplay(totalSecs) {
+      const mins = Math.floor(totalSecs / 60).toString().padStart(2, '0');
+      const secs = (totalSecs % 60).toString().padStart(2, '0');
+      const timerElem = document.getElementById('session-timer');
+      if (timerElem) timerElem.textContent = `${mins}:${secs}`;
+    }
 
     function connectWebSocket() {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -337,15 +516,16 @@
       socket = new WebSocket(wsUrl);
 
       socket.onopen = () => {
-        document.getElementById('ws-indicator').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 glow-live';
+        document.getElementById('ws-indicator').className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 glow-live';
         document.getElementById('ws-status').textContent = 'Connected (Live)';
-        document.getElementById('ws-status').className = 'text-emerald-400';
+        document.getElementById('ws-status').className = 'text-emerald-700 font-medium';
+        startTimer();
       };
 
       socket.onclose = () => {
         document.getElementById('ws-indicator').className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
-        document.getElementById('ws-status').textContent = 'Disconnected. Retrying in 3s...';
-        document.getElementById('ws-status').className = 'text-rose-400';
+        document.getElementById('ws-status').textContent = 'Disconnected. Retrying...';
+        document.getElementById('ws-status').className = 'text-rose-600 font-medium';
         setTimeout(connectWebSocket, 3000);
       };
 
@@ -367,8 +547,8 @@
         updateSkillQueue(data.active_skill, data.queued_skills || [], data.completed_skills || []);
         document.getElementById('depth-badge').textContent = 'Depth: Intro';
         document.getElementById('rubric-id').textContent = 'RUB-INTRO';
-        document.getElementById('required-list').innerHTML = '<li class="text-slate-400 italic">Please share your background and core technical frameworks/tools.</li>';
-        document.getElementById('prohibited-list').innerHTML = '<li class="text-slate-500 italic">None (Free-form introduction)</li>';
+        document.getElementById('required-list').innerHTML = '<li class="text-slate-500 italic">Please share your background and core technical frameworks/tools.</li>';
+        document.getElementById('prohibited-list').innerHTML = '<li class="text-slate-400 italic">None (Free-form introduction)</li>';
       } 
       else if (event === 'status_update') {
         showActivity(data.message);
@@ -376,70 +556,248 @@
       else if (event === 'turn_completed') {
         hideActivity();
 
-        // 1. Update Skill Queue Chips
+        // 1. Update Financial, Candidate & API Telemetry in Header & inFlightSession
+        if (data.candidate_name) {
+          inFlightSession.candidateName = data.candidate_name;
+          const nameBadge = document.getElementById('candidate-name-badge');
+          if (nameBadge) nameBadge.textContent = data.candidate_name;
+          const avatar = document.getElementById('candidate-avatar');
+          if (avatar) avatar.textContent = data.candidate_name.charAt(0).toUpperCase();
+        }
+        if (data.total_backend_calls !== undefined) {
+          inFlightSession.totalBackendCalls = data.total_backend_calls;
+        }
+        if (data.total_gemini_calls !== undefined) {
+          inFlightSession.totalGeminiCalls = data.total_gemini_calls;
+          const gBadge = document.getElementById('gemini-calls-badge');
+          if (gBadge) gBadge.textContent = `${data.total_gemini_calls} LLM calls`;
+        }
+        if (data.total_tokens !== undefined) {
+          inFlightSession.totalTokens = data.total_tokens;
+          document.getElementById('total-tokens-badge').textContent = `${data.total_tokens.toLocaleString()} tokens`;
+        }
+        if (data.estimated_cost_usd !== undefined) {
+          inFlightSession.estimatedCost = data.estimated_cost_usd;
+          document.getElementById('estimated-cost-badge').textContent = `$${data.estimated_cost_usd.toFixed(4)}`;
+        }
+        if (data.elapsed_seconds !== undefined) {
+          inFlightSession.elapsedSeconds = data.elapsed_seconds;
+          sessionSeconds = data.elapsed_seconds;
+          updateTimerDisplay(sessionSeconds);
+        }
+
+        // 2. Update Skill Queue Progress Bar
         updateSkillQueue(data.active_skill, data.queued_skills || [], data.completed_skills || []);
 
-        // 2. Render grading verdict if available
+        // 3. Render grading verdict
         if (data.grading) {
           renderGradingVerdict(data.candidate_answer, data.grading);
         }
 
-        // 3. Render telemetry if available
+        // 4. Render BKT telemetry
         if (data.telemetry) {
           updateTelemetry(data.telemetry);
         }
 
-        // 4. Update policy routing
+        // 5. Update policy routing
         if (data.policy_reason) {
           updatePolicy(data.policy_action, data.policy_reason, data.skill_state || 'IN_PROGRESS');
         }
 
-        // 5. Devil's Advocate Banner toggle
+        // 6. Devil's Advocate Alert Banner toggle
         if (data.policy_action === 'TRIGGER_DEVILS_ADVOCATE') {
           showDevilAdvocateBanner(data.policy_reason);
         } else {
           hideDevilAdvocateBanner();
         }
 
-        // 6. Spot-Check Banner toggle
+        // 7. Spot-Check Banner toggle
         if (data.session_phase === 'SPOT_CHECK') {
           showSpotCheckBanner(data.spot_check_progress || 'In-Flight Spot-Check');
         } else {
           hideSpotCheckBanner();
         }
 
-        // 7. Update Rubric Inspector
+        // 8. Update Rubric Inspector
         if (data.next_rubric) {
           updateRubricInspector(data.next_rubric);
         }
 
-        // 8. Render Next Question
+        // 9. Accumulate In-Flight Turn Audit Record
+        if (data.candidate_answer && data.grading) {
+          const recordedTurn = (data.telemetry && data.telemetry.turn_number > 0)
+            ? data.telemetry.turn_number
+            : inFlightSession.turnsHistory.length + 1;
+          const recordedAttempts = (data.attempts !== undefined && data.attempts > 0)
+            ? data.attempts
+            : ((data.telemetry && data.telemetry.attempts > 0) ? data.telemetry.attempts : (inFlightSession.activeAttempts || inFlightSession.turnsHistory.length + 1));
+
+          inFlightSession.turnsHistory.push({
+            skill_name: data.active_skill || inFlightSession.activeSkill,
+            turn_number: recordedTurn,
+            depth_level: data.telemetry ? data.telemetry.depth_level : inFlightSession.activeDepth,
+            attempts: recordedAttempts,
+            rubric_id: (data.next_rubric && data.next_rubric.rubric_id) || 'RUB-EVAL',
+            question_text: inFlightSession.lastQuestionText || 'Technical Interview Question',
+            candidate_answer: data.candidate_answer,
+            verdict: data.grading.verdict,
+            rationale: data.grading.rationale,
+            prior_mastery: data.telemetry ? data.telemetry.prior : 0.3,
+            posterior: data.telemetry ? data.telemetry.posterior : 0.3,
+            next_mastery: data.telemetry ? data.telemetry.next_mastery : 0.3,
+            delta: data.telemetry ? data.telemetry.delta : 0.0,
+            policy_action: data.policy_action || 'CONTINUE'
+          });
+
+          const fabBadge = document.getElementById('fab-turns-badge');
+          if (fabBadge) fabBadge.textContent = `${inFlightSession.turnsHistory.length} turns`;
+        }
+
+        // Record completed skill report if emitted
+        if (data.final_report && !inFlightSession.completedSkillReports.some(r => r.skill === data.final_report.skill)) {
+          inFlightSession.completedSkillReports.push(data.final_report);
+        }
+
+        // Cache active skill state
+        inFlightSession.activeSkill = data.active_skill || inFlightSession.activeSkill;
+        inFlightSession.queuedSkills = data.queued_skills || inFlightSession.queuedSkills;
+        inFlightSession.completedSkills = data.completed_skills || inFlightSession.completedSkills;
+        if (data.telemetry) {
+          inFlightSession.activeDepth = data.telemetry.depth_level;
+          inFlightSession.activeMastery = data.telemetry.next_mastery;
+        }
+        if (data.attempts !== undefined) {
+          inFlightSession.activeAttempts = data.attempts;
+        }
+
+        // 10. Render Next Question
         if (data.next_question) {
           const depth = data.next_rubric ? data.next_rubric.depth_level : (data.telemetry ? data.telemetry.depth_level : 'L1');
           const isDA = data.policy_action === 'TRIGGER_DEVILS_ADVOCATE';
           const isSpot = data.session_phase === 'SPOT_CHECK';
           renderQuestion(data.next_question, depth, isDA, data.next_rubric, isSpot, data.spot_check_progress);
           document.getElementById('depth-badge').textContent = `Depth: ${depth}`;
+          inFlightSession.lastQuestionText = data.next_question;
         }
 
-        // 9. Handle Completion
+        // 11. Handle Skill Transitions & Completion
+        if (data.policy_action === 'NEXT_SKILL') {
+          document.getElementById('attempts-badge').textContent = 'Attempts: 0/4';
+          inFlightSession.activeAttempts = 0;
+        }
+
         if (data.session_phase === 'COMPLETED' || data.multi_skill_dossier) {
+          inFlightSession.isCompleted = true;
           renderInterviewCompletion('COMPLETED');
           if (data.multi_skill_dossier) {
+            currentDossier = data.multi_skill_dossier;
             renderMultiSkillDossierModal(data.multi_skill_dossier);
-          } else if (data.final_report) {
-            singleSkillReport = data.final_report;
-            renderSingleSkillModal(data.final_report);
           }
         } else {
           document.getElementById('submit-btn').disabled = false;
           document.getElementById('candidate-input').disabled = false;
           document.getElementById('candidate-input').focus();
         }
+
       }
     }
 
+    // Speech Recognition (Microphone Voice Input)
+    let recognition = null;
+    let isRecording = false;
+
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn('SpeechRecognition API not available in this browser.');
+        const micBtn = document.getElementById('mic-btn');
+        if (micBtn) {
+          micBtn.title = 'Voice input not supported in this browser. Please use Chrome/Edge.';
+          micBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        return null;
+      }
+
+      const recognizer = new SpeechRecognition();
+      recognizer.continuous = true;
+      recognizer.interimResults = true;
+      recognizer.lang = 'en-US';
+
+      recognizer.onstart = () => {
+        isRecording = true;
+        const micBtn = document.getElementById('mic-btn');
+        const micLabel = document.getElementById('mic-label');
+        const micStatus = document.getElementById('mic-status');
+        if (micBtn) {
+          micBtn.className = 'px-3 py-1.5 rounded-lg border border-rose-400 bg-rose-50 text-rose-700 text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-xs animate-pulse cursor-pointer';
+        }
+        if (micLabel) micLabel.textContent = 'Stop';
+        if (micStatus) micStatus.classList.remove('hidden');
+      };
+
+      recognizer.onresult = (event) => {
+        let transcript = '';
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        const textarea = document.getElementById('candidate-input');
+        if (textarea) {
+          textarea.value = transcript;
+          textarea.scrollTop = textarea.scrollHeight;
+        }
+      };
+
+      recognizer.onerror = (err) => {
+        console.error('Speech recognition error:', err);
+        stopSpeechRecognition();
+      };
+
+      recognizer.onend = () => {
+        stopSpeechRecognition();
+      };
+
+      return recognizer;
+    }
+
+    function toggleSpeechRecognition() {
+      if (!recognition) {
+        recognition = initSpeechRecognition();
+      }
+      if (!recognition) {
+        alert('Voice input is supported in Google Chrome and Microsoft Edge. Please use one of these browsers.');
+        return;
+      }
+
+      if (isRecording) {
+        recognition.stop();
+        stopSpeechRecognition();
+      } else {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+
+    function stopSpeechRecognition() {
+      isRecording = false;
+      const micBtn = document.getElementById('mic-btn');
+      const micLabel = document.getElementById('mic-label');
+      const micStatus = document.getElementById('mic-status');
+      if (micBtn) {
+        micBtn.className = 'px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs';
+      }
+      if (micLabel) micLabel.textContent = 'Speak';
+      if (micStatus) micStatus.classList.add('hidden');
+    }
+
     function submitAnswer() {
+      if (isRecording && recognition) {
+        try { recognition.stop(); } catch(e) {}
+        stopSpeechRecognition();
+      }
+
       const input = document.getElementById('candidate-input');
       const text = input.value.trim();
       if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
@@ -472,7 +830,7 @@
       // Completed Skills
       completedSkills.forEach(skill => {
         const chip = document.createElement('span');
-        chip.className = 'px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 font-semibold';
+        chip.className = 'px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1 font-semibold text-xs';
         chip.innerHTML = `<span>✓</span><span>${escapeHtml(skill)}</span>`;
         container.appendChild(chip);
       });
@@ -480,66 +838,66 @@
       // Active Skill
       if (activeSkill) {
         const activeChip = document.createElement('span');
-        activeChip.className = 'px-2.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/50 flex items-center gap-1.5 font-bold shadow-sm';
-        activeChip.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping"></span><span>${escapeHtml(activeSkill)}</span>`;
+        activeChip.className = 'px-2.5 py-0.5 rounded bg-teal-100 text-teal-900 border border-teal-400 flex items-center gap-1.5 font-bold shadow-2xs text-xs';
+        activeChip.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-teal-600 animate-ping"></span><span>${escapeHtml(activeSkill)}</span>`;
         container.appendChild(activeChip);
       }
 
       // Upcoming Queued Skills
       queuedSkills.forEach(skill => {
         const chip = document.createElement('span');
-        chip.className = 'px-2 py-0.5 rounded bg-dark-700/80 text-slate-400 border border-dark-600';
+        chip.className = 'px-2 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 text-xs';
         chip.textContent = skill;
         container.appendChild(chip);
       });
     }
 
-    // Chat Message Renderers
+    // Chat Message Renderers (Smooth Auto-Scroll Inside #chat-box Only)
     function renderQuestion(text, depth, isDA, rubric = null, isSpot = false, spotProgress = null) {
       const chat = document.getElementById('chat-box');
       const msgDiv = document.createElement('div');
-      msgDiv.className = 'flex flex-col space-y-2 max-w-3xl';
+      msgDiv.className = 'flex flex-col space-y-2 max-w-2xl';
       
-      let badgeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+      let badgeColor = 'bg-teal-50 text-teal-800 border-teal-200';
       let label = `AI Interviewer (${depth})`;
 
       if (isDA) {
-        badgeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+        badgeColor = 'bg-amber-100 text-amber-900 border-amber-300';
         label = '⚡ Devil\'s Advocate Challenge';
       } else if (isSpot) {
-        badgeColor = 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+        badgeColor = 'bg-cyan-100 text-cyan-900 border-cyan-300';
         label = `⚡ ${spotProgress || 'In-Flight Spot-Check'}`;
       }
 
       let rubricHtml = '';
       if (rubric && rubric.required_criteria) {
         rubricHtml = `
-          <div class="mt-3 pt-3 border-t border-dark-600/50 text-xs font-mono bg-dark-900/60 p-3 rounded-lg border border-dark-600/40">
-            <div class="flex items-center justify-between text-blue-400 font-bold mb-2">
+          <div class="mt-3 pt-2.5 border-t border-slate-200/80 text-xs font-mono bg-slate-50 p-3 rounded-lg border border-slate-200/80">
+            <div class="flex items-center justify-between text-teal-800 font-bold mb-2">
               <span class="flex items-center gap-1.5">
-                <span>🔒 Locked Rubric Generated:</span>
-                <span class="text-slate-400 font-normal">(${rubric.rubric_id})</span>
+                <span>🔒 Rubric-Lock Criteria:</span>
+                <span class="text-slate-500 font-normal">(${rubric.rubric_id})</span>
               </span>
-              <span class="text-[10px] text-slate-500 uppercase tracking-wider">Answer Key</span>
+              <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Answer Key</span>
             </div>
             
-            <div class="space-y-1.5 text-slate-300">
-              <div class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Must articulate:</div>
+            <div class="space-y-1 text-slate-700">
+              <div class="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Required concepts:</div>
               ${rubric.required_criteria.map(c => `
                 <div class="flex items-start gap-1.5 pl-1">
-                  <span class="text-emerald-400 mt-0.5">✓</span>
-                  <span class="leading-tight">${escapeHtml(c)}</span>
+                  <span class="text-emerald-600 font-bold mt-0.5">✓</span>
+                  <span class="leading-relaxed font-sans text-xs">${escapeHtml(c)}</span>
                 </div>
               `).join('')}
             </div>
 
             ${rubric.prohibited_misconceptions && rubric.prohibited_misconceptions.length ? `
-              <div class="space-y-1.5 text-slate-300 mt-2.5 pt-2 border-t border-dark-600/30">
-                <div class="text-[10px] text-rose-400 font-bold uppercase tracking-wider">Disqualifiers:</div>
+              <div class="space-y-1 text-slate-700 mt-2 pt-2 border-t border-slate-200">
+                <div class="text-[10px] text-rose-700 font-bold uppercase tracking-wider">Disqualifiers:</div>
                 ${rubric.prohibited_misconceptions.map(m => `
                   <div class="flex items-start gap-1.5 pl-1">
-                    <span class="text-rose-400 mt-0.5">✗</span>
-                    <span class="leading-tight">${escapeHtml(m)}</span>
+                    <span class="text-rose-600 font-bold mt-0.5">✗</span>
+                    <span class="leading-relaxed font-sans text-xs">${escapeHtml(m)}</span>
                   </div>
                 `).join('')}
               </div>
@@ -550,11 +908,11 @@
 
       msgDiv.innerHTML = `
         <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full ${isSpot ? 'bg-cyan-400' : (isDA ? 'bg-amber-400' : 'bg-blue-400')}"></span>
-          <span class="text-xs font-mono font-bold px-2 py-0.5 rounded border ${badgeColor}">${label}</span>
+          <span class="w-2 h-2 rounded-full ${isSpot ? 'bg-cyan-500' : (isDA ? 'bg-amber-500' : 'bg-teal-500')}"></span>
+          <span class="text-[11px] font-mono font-bold px-2 py-0.5 rounded border ${badgeColor}">${label}</span>
         </div>
-        <div class="p-4 rounded-xl bg-dark-800 border border-dark-600/80 text-sm text-slate-100 leading-relaxed shadow-sm">
-          <div>${escapeHtml(text)}</div>
+        <div class="p-4 rounded-xl bg-white border border-slate-200 text-sm text-slate-900 leading-relaxed shadow-xs">
+          <div class="font-medium">${escapeHtml(text)}</div>
           ${rubricHtml}
         </div>
       `;
@@ -567,8 +925,8 @@
       const msgDiv = document.createElement('div');
       msgDiv.className = 'flex flex-col items-end space-y-1.5';
       msgDiv.innerHTML = `
-        <span class="text-[11px] font-mono text-slate-500">Candidate (You)</span>
-        <div class="p-3.5 rounded-xl bg-blue-600/90 text-white text-sm max-w-2xl leading-relaxed shadow-md">
+        <span class="text-[11px] font-mono text-slate-400">Candidate (You)</span>
+        <div class="p-3.5 rounded-xl bg-slate-900 text-white text-sm max-w-xl leading-relaxed shadow-sm">
           ${escapeHtml(text)}
         </div>
       `;
@@ -580,24 +938,24 @@
       const chat = document.getElementById('chat-box');
       const verdictDiv = document.createElement('div');
       
-      let badgeStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-      let boxStyle = 'border-rose-500/30 bg-rose-950/20';
+      let badgeStyle = 'bg-rose-50 text-rose-700 border-rose-300';
+      let boxStyle = 'border-rose-200 bg-rose-50/40 text-rose-900';
 
       if (grading.verdict === 'correct') {
-        badgeStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-        boxStyle = 'border-emerald-500/30 bg-emerald-950/20';
+        badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        boxStyle = 'border-emerald-200 bg-emerald-50/40 text-emerald-950';
       } else if (grading.verdict === 'partial') {
-        badgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
-        boxStyle = 'border-amber-500/30 bg-amber-950/20';
+        badgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
+        boxStyle = 'border-amber-200 bg-amber-50/40 text-amber-950';
       }
 
-      verdictDiv.className = `p-4 rounded-xl border ${boxStyle} space-y-2 max-w-3xl my-2 text-xs font-mono`;
+      verdictDiv.className = `p-3.5 rounded-xl border ${boxStyle} space-y-1.5 max-w-2xl my-2 text-xs font-mono shadow-2xs`;
       verdictDiv.innerHTML = `
         <div class="flex items-center justify-between">
           <span class="font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${badgeStyle}">Verdict: ${grading.verdict}</span>
-          <span class="text-slate-500">Frozen Rubric Grader</span>
+          <span class="text-slate-500 font-sans text-[11px]">Rubric-Lock Evaluation</span>
         </div>
-        <p class="text-slate-300 font-sans text-xs leading-relaxed pt-1">${escapeHtml(grading.rationale)}</p>
+        <p class="font-sans text-xs leading-relaxed text-slate-800 pt-0.5">${escapeHtml(grading.rationale)}</p>
       `;
       chat.appendChild(verdictDiv);
       chat.scrollTop = chat.scrollHeight;
@@ -606,44 +964,46 @@
     function renderInterviewCompletion(state) {
       const chat = document.getElementById('chat-box');
       const endDiv = document.createElement('div');
-      endDiv.className = 'p-6 rounded-2xl border text-center space-y-3 my-4 bg-blue-950/30 border-blue-500/50';
+      endDiv.className = 'p-5 rounded-2xl border text-center space-y-2.5 my-3 bg-teal-50 border-teal-200 text-teal-950 shadow-xs';
       endDiv.innerHTML = `
-        <span class="text-3xl">🎓</span>
-        <h3 class="text-lg font-bold font-mono text-blue-300">
-          All Skills Assessment Concluded
+        <span class="text-2xl">🎓</span>
+        <h3 class="text-base font-bold font-mono text-teal-900">
+          Technical Assessment Concluded
         </h3>
-        <p class="text-xs text-slate-300 max-w-md mx-auto">
-          Candidate has completed the dynamic skill queue and in-flight spot checks. The final master dossier is ready!
+        <p class="text-xs text-slate-600 max-w-md mx-auto">
+          The candidate completed the dynamic skill queue and spot-check challenge. The verified audit dossier is ready!
         </p>
       `;
       chat.appendChild(endDiv);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    // Inspector Updaters
+    // Inspector Updates
     function updateRubricInspector(rubric) {
       document.getElementById('rubric-id').textContent = rubric.rubric_id;
       
       const reqList = document.getElementById('required-list');
       reqList.innerHTML = (rubric.required_criteria || []).map(c => `
-        <li class="flex items-start gap-2">
-          <span class="text-emerald-400 mt-0.5">✓</span>
+        <li class="flex items-start gap-1.5">
+          <span class="text-emerald-600 font-bold mt-0.5">✓</span>
           <span class="leading-snug">${escapeHtml(c)}</span>
         </li>
       `).join('');
 
       const proList = document.getElementById('prohibited-list');
       proList.innerHTML = (rubric.prohibited_misconceptions || []).map(m => `
-        <li class="flex items-start gap-2">
-          <span class="text-rose-400 mt-0.5">✗</span>
+        <li class="flex items-start gap-1.5">
+          <span class="text-rose-600 font-bold mt-0.5">✗</span>
           <span class="leading-snug">${escapeHtml(m)}</span>
         </li>
       `).join('');
     }
 
     function updateTelemetry(t) {
-      document.getElementById('turn-badge').textContent = `Turn ${t.turn_number}`;
-      document.getElementById('attempts-badge').textContent = `Attempts: ${t.turn_number}/4`;
+      const turnNum = (t.turn_number && t.turn_number > 0) ? t.turn_number : inFlightSession.turnsHistory.length;
+      document.getElementById('turn-badge').textContent = `Turn ${turnNum}`;
+      const skillAttempts = (t.attempts !== undefined && t.attempts > 0) ? t.attempts : (inFlightSession.activeAttempts > 0 ? inFlightSession.activeAttempts : 1);
+      document.getElementById('attempts-badge').textContent = `Attempts: ${skillAttempts}/4`;
       document.getElementById('depth-badge').textContent = `Depth: ${t.depth_level}`;
 
       document.getElementById('math-prior').textContent = t.prior.toFixed(4);
@@ -660,7 +1020,7 @@
       deltaContainer.classList.remove('hidden');
       const sign = t.delta >= 0 ? '+' : '';
       deltaVal.textContent = `${sign}${t.delta.toFixed(4)}`;
-      deltaVal.className = t.delta >= 0 ? 'font-bold text-emerald-400' : 'font-bold text-rose-400';
+      deltaVal.className = t.delta >= 0 ? 'font-bold text-emerald-600' : 'font-bold text-rose-600';
     }
 
     function updatePolicy(action, reason, state) {
@@ -669,11 +1029,11 @@
       stateBadge.textContent = state;
 
       if (state === 'VERIFIED') {
-        stateBadge.className = 'px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded font-bold';
+        stateBadge.className = 'px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded font-bold';
       } else if (state === 'SHALLOW') {
-        stateBadge.className = 'px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded font-bold';
+        stateBadge.className = 'px-2 py-0.5 bg-rose-50 text-rose-800 border border-rose-300 rounded font-bold';
       } else {
-        stateBadge.className = 'px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded font-bold';
+        stateBadge.className = 'px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-300 rounded font-bold';
       }
     }
 
@@ -719,96 +1079,195 @@
       return String(text).replace(/[&<>"']/g, m => map[m]);
     }
 
-    // Modal & Dossier Renderers
+    // =========================================================================
+    // MODAL & LIVE IN-FLIGHT DOSSIER RENDERER
+    // =========================================================================
+    function openCurrentReportModal() {
+      // If final certified dossier exists, show it directly
+      if (currentDossier && inFlightSession.isCompleted) {
+        renderMultiSkillDossierModal(currentDossier);
+        return;
+      }
+
+      // Compile live in-flight progress report from accumulated turns
+      const activeReports = [...inFlightSession.completedSkillReports];
+      const isCurCompleted = inFlightSession.completedSkills.includes(inFlightSession.activeSkill);
+      
+      if (inFlightSession.activeSkill && inFlightSession.activeSkill !== 'Introduction' && !isCurCompleted) {
+        const curSkillTurns = inFlightSession.turnsHistory.filter(t => t.skill_name === inFlightSession.activeSkill);
+        const curAttempts = inFlightSession.activeAttempts > 0 ? inFlightSession.activeAttempts : (curSkillTurns.length || 1);
+        activeReports.push({
+          skill: inFlightSession.activeSkill,
+          final_state: 'IN_PROGRESS',
+          final_mastery: inFlightSession.activeMastery,
+          total_turns: curAttempts,
+          da_triggered: inFlightSession.hasFacedDA,
+          da_defended: inFlightSession.daDefended,
+          summary_headline: `Currently evaluating at depth ${inFlightSession.activeDepth} (Attempt ${curAttempts}/4). Latent mastery: ${(inFlightSession.activeMastery * 100).toFixed(1)}%.`,
+          turns: curSkillTurns
+        });
+      }
+
+      const inFlightDossier = {
+        is_live_progress: true,
+        candidate_name: inFlightSession.candidateName,
+        total_backend_calls: inFlightSession.totalBackendCalls,
+        total_gemini_calls: inFlightSession.totalGeminiCalls,
+        session_duration_seconds: sessionSeconds,
+        total_tokens: inFlightSession.totalTokens,
+        estimated_cost_usd: inFlightSession.estimatedCost,
+        verified_skills: inFlightSession.completedSkillReports.filter(r => r.final_state === 'VERIFIED').map(r => r.skill),
+        shallow_skills: inFlightSession.completedSkillReports.filter(r => r.final_state === 'SHALLOW').map(r => r.skill),
+        unverified_buzzwords: [],
+        executive_summary: `Live Progress Report: ${inFlightSession.completedSkills.length} skill(s) completed (${inFlightSession.completedSkills.join(', ') || 'None'}), evaluating '${inFlightSession.activeSkill}' (${inFlightSession.turnsHistory.length} turns recorded so far). Upcoming queued: ${inFlightSession.queuedSkills.join(', ') || 'None'}.`,
+        primary_skills_reports: activeReports,
+        spot_check_records: inFlightSession.spotCheckRecords,
+        all_turns: inFlightSession.turnsHistory
+      };
+
+      currentDossier = inFlightDossier;
+      renderMultiSkillDossierModal(inFlightDossier);
+    }
+
     function renderMultiSkillDossierModal(dossier) {
-      currentDossier = dossier;
       document.getElementById('report-headline').textContent = dossier.executive_summary;
+
+      const titleElem = document.getElementById('report-headline-title');
+      if (titleElem) {
+        titleElem.textContent = dossier.is_live_progress 
+          ? `Candidate Progress Dossier (${dossier.all_turns ? dossier.all_turns.length : 0} Turns So Far)`
+          : 'Multi-Skill Candidate Assessment Report';
+      }
+
+      // Fill KPI summary cards
+      const durationSecs = dossier.session_duration_seconds || sessionSeconds;
+      const mins = Math.floor(durationSecs / 60).toString().padStart(2, '0');
+      const secs = (durationSecs % 60).toString().padStart(2, '0');
+      document.getElementById('modal-duration').textContent = `${mins}:${secs}`;
+      document.getElementById('modal-tokens').textContent = (dossier.total_tokens || 0).toLocaleString();
+      document.getElementById('modal-cost').textContent = `$${(dossier.estimated_cost_usd || 0).toFixed(4)}`;
+      document.getElementById('modal-verified-count').textContent = `${(dossier.verified_skills || []).length} Verified`;
+      const bCalls = document.getElementById('modal-backend-calls');
+      if (bCalls) bCalls.textContent = `${dossier.total_backend_calls || inFlightSession.totalBackendCalls || 0} Calls`;
+      const gCalls = document.getElementById('modal-gemini-calls');
+      if (gCalls) gCalls.textContent = `${dossier.total_gemini_calls || inFlightSession.totalGeminiCalls || 0} Calls`;
 
       // 1. Primary Skills Cards
       const primaryContainer = document.getElementById('primary-skills-grid');
       primaryContainer.innerHTML = dossier.primary_skills_reports.map(r => {
-        const isVer = r.final_state === 'VERIFIED';
+        let badgeStyle = 'bg-rose-50 text-rose-800 border-rose-300';
+        if (r.final_state === 'VERIFIED') {
+          badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        } else if (r.final_state === 'IN_PROGRESS') {
+          badgeStyle = 'bg-teal-50 text-teal-800 border-teal-300 animate-pulse font-bold';
+        }
+
         return `
-          <div class="p-3.5 rounded-xl bg-dark-800/80 border border-dark-600/60 font-mono text-xs space-y-2">
+          <div class="p-4 rounded-xl bg-white border border-slate-200 text-xs space-y-2 shadow-2xs">
             <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-100">${escapeHtml(r.skill)}</span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isVer ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'}">${r.final_state}</span>
+              <span class="text-sm font-bold text-slate-900">${escapeHtml(r.skill)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono ${badgeStyle}">${r.final_state}</span>
             </div>
-            <div class="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>Mastery: <strong class="text-blue-400">${(r.final_mastery * 100).toFixed(1)}%</strong></span>
-              <span>DA: <strong>${r.da_triggered ? (r.da_defended ? 'Defended ✓' : 'Failed ✗') : 'N/A'}</strong></span>
+            <div class="flex items-center justify-between text-slate-600 font-mono text-[11px] bg-slate-50 p-2 rounded-lg border border-slate-100">
+              <span>Mastery: <strong class="text-teal-700">${(r.final_mastery * 100).toFixed(1)}%</strong></span>
+              <span>DA Status: <strong>${r.da_triggered ? (r.da_defended ? 'Defended ✓' : 'Failed ✗') : (r.final_state === 'IN_PROGRESS' ? 'Pending' : 'N/A')}</strong></span>
             </div>
-            <p class="text-[11px] text-slate-300 font-sans border-t border-dark-600/30 pt-1.5">${escapeHtml(r.summary_headline)}</p>
+            <p class="text-xs text-slate-600 font-sans border-t border-slate-100 pt-1.5 leading-relaxed">${escapeHtml(r.summary_headline)}</p>
           </div>
         `;
       }).join('');
 
-      // 2. In-Flight Spot Checks Cards
+      // 2. In-Flight Spot Checks Cards (1-question lean challenge)
       const spotContainer = document.getElementById('spot-checks-container');
       if (!dossier.spot_check_records || dossier.spot_check_records.length === 0) {
-        spotContainer.innerHTML = '<div class="text-xs text-slate-500 italic font-mono">No in-flight surprise technologies were mentioned.</div>';
+        spotContainer.innerHTML = '<div class="text-xs text-slate-400 italic font-mono p-3 bg-white rounded-xl border border-slate-200">No in-flight surprise technologies were mentioned.</div>';
       } else {
         spotContainer.innerHTML = dossier.spot_check_records.map(sc => {
           const isHandsOn = sc.final_verdict === 'VERIFIED_HANDS_ON';
           return `
-            <div class="p-3.5 rounded-xl bg-dark-800/80 border border-dark-600/60 space-y-2 text-xs">
+            <div class="p-4 rounded-xl bg-white border border-slate-200 space-y-2 text-xs shadow-2xs">
               <div class="flex items-center justify-between font-mono">
-                <span class="font-bold text-cyan-300 text-sm">⚡ ${escapeHtml(sc.skill_name)}</span>
-                <span class="px-2 py-0.5 rounded font-bold uppercase text-[10px] ${isHandsOn ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'}">
+                <span class="font-bold text-cyan-800 text-sm">⚡ Spot Check: ${escapeHtml(sc.skill_name)}</span>
+                <span class="px-2 py-0.5 rounded font-bold uppercase text-[10px] ${isHandsOn ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-amber-50 text-amber-800 border border-amber-300'}">
                   ${isHandsOn ? 'Verified Hands-On' : 'Unverified Buzzword'}
                 </span>
               </div>
-              <p class="text-slate-300 font-sans leading-relaxed">${escapeHtml(sc.rationale)}</p>
-              <div class="p-2.5 rounded-lg bg-dark-900/60 font-mono text-[11px] text-slate-400 space-y-1">
-                <div><strong>Q1 (Arch):</strong> ${escapeHtml(sc.question_1)} <span class="text-blue-400">(${sc.verdict_1})</span></div>
-                ${sc.question_2 ? `<div><strong>Q2 (Trade-off):</strong> ${escapeHtml(sc.question_2)} <span class="text-blue-400">(${sc.verdict_2})</span></div>` : ''}
+              <p class="text-slate-700 font-sans leading-relaxed">${escapeHtml(sc.rationale)}</p>
+              <div class="p-2.5 rounded-lg bg-slate-50 font-mono text-[11px] text-slate-600 space-y-1 border border-slate-200/80">
+                <div><strong>Question:</strong> ${escapeHtml(sc.question || sc.question_1 || '')}</div>
+                <div><strong>Verdict:</strong> <span class="text-teal-700 font-bold">${sc.verdict || sc.verdict_1 || 'Evaluated'}</span></div>
               </div>
             </div>
           `;
         }).join('');
       }
 
-      // 3. Combined Chronological Turns
+      // 3. Chronological Audit Trail (Questions Truncated with Expandable Details)
       const turnsContainer = document.getElementById('report-turns-container');
-      const allTurns = dossier.primary_skills_reports.flatMap(r => r.turns);
-      turnsContainer.innerHTML = allTurns.map(t => {
-        let verdictStyle = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-        if (t.verdict === 'correct') verdictStyle = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-        else if (t.verdict === 'partial') verdictStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+      const allTurns = dossier.all_turns || dossier.primary_skills_reports.flatMap(r => r.turns || []);
+      if (!allTurns || allTurns.length === 0) {
+        turnsContainer.innerHTML = '<div class="text-xs text-slate-400 italic font-mono p-3 bg-white rounded-xl border border-slate-200">No evaluated turns recorded yet.</div>';
+        document.getElementById('report-modal').classList.remove('hidden');
+        return;
+      }
+      turnsContainer.innerHTML = allTurns.map((t, idx) => {
+        let verdictStyle = 'bg-rose-50 text-rose-700 border-rose-300';
+        if (t.verdict === 'correct') verdictStyle = 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        else if (t.verdict === 'partial') verdictStyle = 'bg-amber-50 text-amber-800 border-amber-300';
 
         const sign = t.delta >= 0 ? '+' : '';
-        const deltaColor = t.delta >= 0 ? 'text-emerald-400' : 'text-rose-400';
+        const deltaColor = t.delta >= 0 ? 'text-emerald-700' : 'text-rose-700';
+        const turnNum = (t.turn_number && t.turn_number > 0) ? t.turn_number : (idx + 1);
+
+        // Truncate long questions so the report is clean and easy to scan
+        const shortQuestion = t.question_text.length > 120 
+          ? t.question_text.substring(0, 120) + '...' 
+          : t.question_text;
+
+        const shortAnswer = t.candidate_answer.length > 130 
+          ? t.candidate_answer.substring(0, 130) + '...' 
+          : t.candidate_answer;
 
         return `
-          <div class="p-4 rounded-xl bg-dark-800 border border-dark-600/60 space-y-3 font-sans text-xs">
+          <div class="p-4 rounded-xl bg-white border border-slate-200 space-y-2.5 font-sans text-xs shadow-2xs">
             <div class="flex items-center justify-between font-mono">
               <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30 font-bold">${escapeHtml(t.skill_name || 'Skill')} - Turn ${t.turn_number} (${t.depth_level})</span>
-                <span class="text-slate-500">Rubric: ${escapeHtml(t.rubric_id)}</span>
+                <span class="px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 font-bold">${escapeHtml(t.skill_name || 'Skill')} - Turn ${turnNum} (${t.depth_level})</span>
+                <span class="text-slate-400 text-[11px]">${escapeHtml(t.rubric_id)}</span>
               </div>
-              <span class="px-2 py-0.5 rounded border uppercase font-bold ${verdictStyle}">Verdict: ${t.verdict}</span>
+              <span class="px-2 py-0.5 rounded border uppercase font-bold text-[10px] ${verdictStyle}">Verdict: ${t.verdict}</span>
             </div>
 
-            <div class="space-y-1.5">
-              <p class="text-slate-200 font-semibold">Q: ${escapeHtml(t.question_text)}</p>
-              <div class="p-2.5 rounded-lg bg-dark-900/60 text-slate-300 border border-dark-600/40 italic">
-                "${escapeHtml(t.candidate_answer)}"
+            <!-- Concise Question Snippet with Expandable Full Text -->
+            <div class="space-y-1">
+              <div class="text-slate-900 font-semibold flex items-baseline justify-between">
+                <span>Q: ${escapeHtml(shortQuestion)}</span>
+              </div>
+              ${t.question_text.length > 120 ? `
+                <details class="text-[11px] text-teal-700 font-mono">
+                  <summary class="cursor-pointer hover:underline">View full question prompt</summary>
+                  <p class="mt-1 p-2 bg-slate-50 border border-slate-200 rounded text-slate-800 font-sans leading-relaxed">${escapeHtml(t.question_text)}</p>
+                </details>
+              ` : ''}
+              
+              <div class="p-2 rounded-lg bg-slate-50 text-slate-700 border border-slate-100 italic text-[11px]">
+                "${escapeHtml(shortAnswer)}"
               </div>
             </div>
 
-            <div class="text-slate-400">
-              <strong class="text-slate-300">Grader Rationale:</strong> ${escapeHtml(t.rationale)}
+            <div class="text-slate-600 text-xs">
+              <strong class="text-slate-800">Evaluator Rationale:</strong> ${escapeHtml(t.rationale)}
             </div>
 
-            <div class="pt-2 border-t border-dark-600/40 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
+            <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
               <div class="flex items-center gap-3">
-                <span class="text-slate-400">Prior: <strong>${t.prior_mastery.toFixed(4)}</strong></span>
-                <span class="text-slate-400">Posterior: <strong>${t.posterior.toFixed(4)}</strong></span>
-                <span class="text-slate-400">New Mastery: <strong class="text-indigo-300">${t.next_mastery.toFixed(4)}</strong></span>
-                <span class="${deltaColor}">Δ (${sign}${t.delta.toFixed(4)})</span>
+                <span class="text-slate-500">Prior: <strong>${t.prior_mastery.toFixed(4)}</strong></span>
+                <span class="text-slate-500">Posterior: <strong>${t.posterior.toFixed(4)}</strong></span>
+                <span class="text-slate-500">Mastery: <strong class="text-teal-700">${t.next_mastery.toFixed(4)}</strong></span>
+                <span class="${deltaColor} font-bold">Δ (${sign}${t.delta.toFixed(4)})</span>
               </div>
               <div class="text-slate-500">
-                Route: <span class="text-slate-300">${escapeHtml(t.policy_action)}</span>
+                Action: <span class="text-slate-800 font-semibold">${escapeHtml(t.policy_action)}</span>
               </div>
             </div>
           </div>
@@ -826,7 +1285,15 @@
       if (!currentDossier) return;
       let md = `# Candidate Multi-Skill Assessment Dossier\n\n`;
       md += `### Executive Summary\n${currentDossier.executive_summary}\n\n`;
-      
+      if (currentDossier.candidate_name) {
+        md += `- **Candidate Name:** ${currentDossier.candidate_name}\n`;
+      }
+      md += `- **Total Backend Invocations:** ${currentDossier.total_backend_calls || inFlightSession.totalBackendCalls || 0}\n`;
+      md += `- **Total Gemini LLM API Calls:** ${currentDossier.total_gemini_calls || inFlightSession.totalGeminiCalls || 0}\n`;
+      md += `- **Total Tokens Used:** ${(currentDossier.total_tokens || 0).toLocaleString()}\n`;
+      md += `- **Estimated API Cost:** $${(currentDossier.estimated_cost_usd || 0).toFixed(4)} USD\n`;
+      md += `- **Session Duration:** ${Math.floor((currentDossier.session_duration_seconds || sessionSeconds) / 60)}m ${(currentDossier.session_duration_seconds || sessionSeconds) % 60}s\n\n`;
+
       md += `### 1. Primary Assessed Skills\n`;
       currentDossier.primary_skills_reports.forEach(r => {
         md += `- **${r.skill}**: ${r.final_state} (${(r.final_mastery * 100).toFixed(1)}% Mastery) | Devil's Advocate: ${r.da_triggered ? (r.da_defended ? 'Defended' : 'Failed') : 'N/A'}\n`;
@@ -834,28 +1301,27 @@
       md += `\n`;
 
       if (currentDossier.spot_check_records && currentDossier.spot_check_records.length > 0) {
-        md += `### 2. In-Flight Spot-Check Probes (Hands-On Verification)\n`;
+        md += `### 2. In-Flight Spot-Check Probes\n`;
         currentDossier.spot_check_records.forEach(sc => {
           md += `- **${sc.skill_name}**: ${sc.final_verdict} - ${sc.rationale}\n`;
         });
         md += `\n`;
       }
 
-      md += `### 3. Chronological Turn Evidence Trail\n\n`;
-      currentDossier.primary_skills_reports.forEach(r => {
-        md += `#### Skill: ${r.skill}\n\n`;
-        r.turns.forEach(t => {
-          md += `##### Turn ${t.turn_number} (${t.depth_level}) - Verdict: ${t.verdict.toUpperCase()}\n`;
-          md += `**Question:** ${t.question_text}\n\n`;
-          md += `**Candidate Answer:** "${t.candidate_answer}"\n\n`;
-          md += `**Grader Rationale:** ${t.rationale}\n\n`;
-          md += `**BKT Math:** Prior ${t.prior_mastery.toFixed(4)} -> Posterior ${t.posterior.toFixed(4)} -> Next Mastery ${t.next_mastery.toFixed(4)} (Delta: ${t.delta >= 0 ? '+' : ''}${t.delta.toFixed(4)})\n\n`;
-          md += `**Route:** ${t.policy_action}\n\n---\n\n`;
-        });
+      md += `### 3. Chronological Turn Audit Trail\n\n`;
+      const turns = currentDossier.all_turns || (currentDossier.primary_skills_reports || []).flatMap(r => r.turns || []);
+      turns.forEach((t, idx) => {
+        const turnNum = (t.turn_number && t.turn_number > 0) ? t.turn_number : (idx + 1);
+        md += `##### Turn ${turnNum} (${t.skill_name || 'Skill'} - ${t.depth_level}) - Verdict: ${(t.verdict || '').toUpperCase()}\n`;
+        md += `**Question:** ${t.question_text}\n\n`;
+        md += `**Candidate Answer:** "${t.candidate_answer}"\n\n`;
+        md += `**Evaluator Rationale:** ${t.rationale}\n\n`;
+        md += `**BKT Math:** Prior ${(t.prior_mastery || 0).toFixed(4)} -> Posterior ${(t.posterior || 0).toFixed(4)} -> New Mastery ${(t.next_mastery || 0).toFixed(4)} (Delta: ${(t.delta || 0) >= 0 ? '+' : ''}${(t.delta || 0).toFixed(4)})\n\n`;
+        md += `**Route:** ${t.policy_action}\n\n---\n\n`;
       });
 
       navigator.clipboard.writeText(md).then(() => {
-        alert('Multi-Skill Dossier copied to clipboard as Markdown!');
+        alert('Multi-Skill Assessment Dossier copied to clipboard as Markdown!');
       });
     }
 

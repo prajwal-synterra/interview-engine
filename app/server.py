@@ -9,6 +9,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import json
+import time
+from typing import Optional
 
 from app.models import (
     LockedRubric,
@@ -19,15 +21,15 @@ from app.models import (
     FinalAuditReport,
     SpotCheckRecord,
     MultiSkillDossier,
+    TokenUsage
 )
 from app.bkt import update_mastery, DEFAULT_PRIOR, DEPTH_LEVEL_PARAMS
 from app.policy import evaluate_policy, PolicyDecision
 from app.gemini_service import (
     generate_question_and_rubric,
     generate_devils_advocate_question,
-    grade_answer_with_rubric,
+    grade_and_detect_skills,       # NEW: Merged 2-in-1 call (grades + extracts skills)
     extract_skills_from_intro,
-    detect_mentioned_skills,
     generate_spot_check_question,
 )
 
@@ -65,8 +67,19 @@ class InterviewSession:
         # Spot-Check Interceptor State
         self.active_spot_check: SpotCheckRecord = None
         self.spot_check_records: list[SpotCheckRecord] = []
+        self.max_spot_checks: int = 1
+        self.spot_checks_count: int = 0
+        self.spot_check_count: int = 0
         self.spot_check_question_index: int = 0
         self.paused_primary_rubric: LockedRubric = None
+
+        # Telemetry & Time Governance
+        self.candidate_name: Optional[str] = None
+        self.backend_calls_count: int = 0
+        self.gemini_calls_count: int = 0
+        self.asked_questions_history: list[str] = []
+        self.tokens = TokenUsage()
+        self.start_time: float = time.time()
 
 
 @app.websocket("/ws/interview")
@@ -107,6 +120,8 @@ async def interview_websocket(websocket: WebSocket):
             if not candidate_answer:
                 continue
 
+            session.backend_calls_count += 1
+
             # =========================================================================
             # CASE 1: CANDIDATE SUBMITS INTRODUCTION (Turn 0)
             # =========================================================================
@@ -116,7 +131,10 @@ async def interview_websocket(websocket: WebSocket):
                     "message": "Analyzing introduction and compiling candidate skill queue..."
                 }))
 
-                extracted = extract_skills_from_intro(candidate_answer)
+                extracted, candidate_name, p_token, c_token = extract_skills_from_intro(candidate_answer)
+                session.candidate_name = candidate_name
+                session.tokens.add(p_token, c_token)
+                session.gemini_calls_count += 1
                 session.skill_queue = extracted if extracted else ["Python", "FastAPI"]
                 session.current_skill = session.skill_queue.pop(0)
                 session.phase = "PRIMARY_SKILL"
@@ -124,23 +142,39 @@ async def interview_websocket(websocket: WebSocket):
                 session.prior_mastery = DEFAULT_PRIOR
                 session.attempts = 0
 
+                name_msg = f"Welcome, {session.candidate_name}! " if session.candidate_name else ""
                 await websocket.send_text(json.dumps({
                     "event": "status_update",
-                    "message": f"Skill queue built: {session.current_skill}, {', '.join(session.skill_queue)}. Locking initial rubric for {session.current_skill}..."
+                    "message": f"{name_msg}Skill queue ready: {session.current_skill}, {', '.join(session.skill_queue)}. Preparing first question for {session.current_skill}..."
                 }))
 
-                session.active_rubric = generate_question_and_rubric(session.current_skill, "L1")
+                session.active_rubric, p_tok, c_tok = generate_question_and_rubric(
+                    skill=session.current_skill, 
+                    depth_level="L1",
+                    previous_questions=session.asked_questions_history,
+                    candidate_name=session.candidate_name,
+                )
+                session.tokens.add(p_tok, c_tok)
+                session.gemini_calls_count += 1
+                session.asked_questions_history.append(session.active_rubric.question_text)
 
                 response_payload = TurnResponse(
                     event="turn_completed",
                     session_phase="PRIMARY_SKILL",
                     active_skill=session.current_skill,
+                    attempts=0,
+                    candidate_name=session.candidate_name,
+                    total_backend_calls=session.backend_calls_count,
+                    total_gemini_calls=session.gemini_calls_count,
                     queued_skills=session.skill_queue,
                     completed_skills=session.completed_skills,
                     candidate_answer=candidate_answer,
                     next_question=session.active_rubric.question_text,
                     next_rubric=session.active_rubric,
                     skill_state="IN_PROGRESS",
+                    total_tokens=session.tokens.total_tokens,
+                    estimated_cost_usd=session.tokens.estimated_cost_usd,
+                    elapsed_seconds=int(time.time() - session.start_time),
                 )
                 await websocket.send_text(json.dumps(response_payload.model_dump()))
                 continue
@@ -148,91 +182,68 @@ async def interview_websocket(websocket: WebSocket):
             # =========================================================================
             # CASE 2: CANDIDATE ANSWERS A SPOT-CHECK QUESTION (1 of 2 or 2 of 2)
             # =========================================================================
+            # --- UPDATE NEEDED HERE (BLOCK 4: LEAN 1-QUESTION SPOT CHECK) ---
             if session.phase == "SPOT_CHECK":
                 await websocket.send_text(json.dumps({
                     "event": "status_update",
                     "message": f"Grading spot-check response for {session.active_spot_check.skill_name}..."
                 }))
 
-                grading: GradingResult = grade_answer_with_rubric(session.active_rubric, candidate_answer)
+                # Unified evaluation with token tracking
+                grading, p_tok, c_tok = grade_and_detect_skills(session.active_rubric, candidate_answer)
+                session.tokens.add(p_tok, c_tok)
+                session.gemini_calls_count += 1
 
-                if session.spot_check_question_index == 1:
-                    # Save Answer 1 & move to Question 2
-                    session.active_spot_check.answer_1 = candidate_answer
-                    session.active_spot_check.verdict_1 = grading.verdict
-                    session.spot_check_question_index = 2
+                # Finalize 1-Question Spot Check
+                session.active_spot_check.answer = candidate_answer
+                session.active_spot_check.verdict = grading.verdict
 
-                    await websocket.send_text(json.dumps({
-                        "event": "status_update",
-                        "message": f"Generating Question 2 of 2 (Production Trade-offs) for {session.active_spot_check.skill_name}..."
-                    }))
-
-                    spot_rubric_2 = generate_spot_check_question(
-                        skill=session.active_spot_check.skill_name,
-                        question_index=2,
-                        previous_context=candidate_answer,
-                    )
-                    session.active_rubric = spot_rubric_2
-
-                    response_payload = TurnResponse(
-                        event="turn_completed",
-                        session_phase="SPOT_CHECK",
-                        active_skill=session.current_skill,
-                        queued_skills=session.skill_queue,
-                        completed_skills=session.completed_skills,
-                        spot_check_progress=f"Spot-Check 2/2: {session.active_spot_check.skill_name}",
-                        candidate_answer=candidate_answer,
-                        grading=grading,
-                        next_question=spot_rubric_2.question_text,
-                        next_rubric=spot_rubric_2,
-                        skill_state="IN_PROGRESS",
-                    )
-                    await websocket.send_text(json.dumps(response_payload.model_dump()))
-                    continue
-
+                if grading.verdict == "correct":
+                    session.active_spot_check.final_verdict = "VERIFIED_HANDS_ON"
+                    session.active_spot_check.rationale = "Candidate demonstrated concrete architectural mechanics under targeted spot-checking."
+                elif grading.verdict == "partial":
+                    session.active_spot_check.final_verdict = "VERIFIED_HANDS_ON"
+                    session.active_spot_check.rationale = "Candidate demonstrated practical familiarity with minor omissions."
                 else:
-                    # Question 2 answered: Finalize Spot-Check
-                    session.active_spot_check.answer_2 = candidate_answer
-                    session.active_spot_check.verdict_2 = grading.verdict
+                    session.active_spot_check.final_verdict = "UNVERIFIED_BUZZWORD"
+                    session.active_spot_check.rationale = "Candidate gave superficial or flawed answers; identified as name-drop."
 
-                    # Determine hands-on status
-                    v1 = session.active_spot_check.verdict_1
-                    v2 = session.active_spot_check.verdict_2
-                    if "correct" in (v1, v2) or (v1 == "partial" and v2 == "partial"):
-                        session.active_spot_check.final_verdict = "VERIFIED_HANDS_ON"
-                        session.active_spot_check.rationale = "Candidate demonstrated concrete architectural mechanics under targeted spot-checking."
-                    else:
-                        session.active_spot_check.final_verdict = "UNVERIFIED_BUZZWORD"
-                        session.active_spot_check.rationale = "Candidate gave superficial or flawed answers; identified as name-drop."
+                session.spot_check_records.append(session.active_spot_check)
+                spot_finished_skill = session.active_spot_check.skill_name
 
-                    session.spot_check_records.append(session.active_spot_check)
-                    spot_finished_skill = session.active_spot_check.skill_name
+                await websocket.send_text(json.dumps({
+                    "event": "status_update",
+                    "message": f"Spot-check complete for {spot_finished_skill} ({session.active_spot_check.final_verdict}). Resuming primary assessment for {session.current_skill}..."
+                }))
 
-                    await websocket.send_text(json.dumps({
-                        "event": "status_update",
-                        "message": f"Spot-check complete for {spot_finished_skill} ({session.active_spot_check.final_verdict}). Resuming primary assessment for {session.current_skill}..."
-                    }))
+                # Resume Primary Skill
+                session.phase = "PRIMARY_SKILL"
+                session.active_rubric = session.paused_primary_rubric
+                session.active_spot_check = None
 
-                    # Resume Primary Skill
-                    session.phase = "PRIMARY_SKILL"
-                    session.active_rubric = session.paused_primary_rubric
-                    session.active_spot_check = None
+                response_payload = TurnResponse(
+                    event="turn_completed",
+                    session_phase="PRIMARY_SKILL",
+                    active_skill=session.current_skill,
+                    attempts=session.attempts,
+                    candidate_name=session.candidate_name,
+                    total_backend_calls=session.backend_calls_count,
+                    total_gemini_calls=session.gemini_calls_count,
+                    queued_skills=session.skill_queue,
+                    completed_skills=session.completed_skills,
+                    spot_check_progress=None,
+                    candidate_answer=candidate_answer,
+                    grading=grading,
+                    next_question=session.active_rubric.question_text,
+                    next_rubric=session.active_rubric,
+                    skill_state=session.state,
+                    total_tokens=session.tokens.total_tokens,
+                    estimated_cost_usd=session.tokens.estimated_cost_usd,
+                    elapsed_seconds=int(time.time() - session.start_time),
+                )
+                await websocket.send_text(json.dumps(response_payload.model_dump()))
+                continue
 
-                    response_payload = TurnResponse(
-                        event="turn_completed",
-                        session_phase="PRIMARY_SKILL",
-                        active_skill=session.current_skill,
-                        queued_skills=session.skill_queue,
-                        completed_skills=session.completed_skills,
-                        spot_check_progress=None,
-                        candidate_answer=candidate_answer,
-                        grading=grading,
-                        next_question=session.active_rubric.question_text,
-                        next_rubric=session.active_rubric,
-                        skill_state=session.state,
-                    )
-                    await websocket.send_text(json.dumps(response_payload.model_dump()))
-                    continue
 
             # =========================================================================
             # CASE 3: PRIMARY SKILL ASSESSMENT (BKT + Rubric-Lock + Policy Engine)
@@ -242,11 +253,38 @@ async def interview_websocket(websocket: WebSocket):
 
             await websocket.send_text(json.dumps({
                 "event": "status_update",
-                "message": f"Evaluating answer for {session.current_skill} against frozen rubric..."
+                "message": f"Evaluating answer for {session.current_skill} (Single-Call Grading & Skill Scan)..."
             }))
 
-            # Step 1: Grade against locked rubric
-            grading: GradingResult = grade_answer_with_rubric(session.active_rubric, candidate_answer)
+            # Step 1: Combined Evaluation with 503 Crash Protection
+            try:
+                grading, p_tok, c_tok = grade_and_detect_skills(session.active_rubric, candidate_answer)
+                session.tokens.add(p_tok, c_tok)
+                session.gemini_calls_count += 1
+            except Exception as e:
+                print(f"[Gemini 503/API Spike Caught] {e}")
+                # Revert attempt increments so candidate can retry without penalty
+                session.turn_number -= 1
+                session.attempts -= 1
+                await websocket.send_text(json.dumps({
+                    "event": "status_update",
+                    "message": "⚠️ Gemini API is temporarily experiencing high demand. Please click 'Submit Answer' again in a moment."
+                }))
+                await websocket.send_text(json.dumps({
+                    "event": "turn_completed",
+                    "session_phase": session.phase,
+                    "active_skill": session.current_skill,
+                    "attempts": session.attempts,
+                    "queued_skills": session.skill_queue,
+                    "completed_skills": session.completed_skills,
+                    "next_question": session.active_rubric.question_text,
+                    "next_rubric": session.active_rubric,
+                    "skill_state": session.state,
+                    "total_tokens": session.tokens.total_tokens,
+                    "estimated_cost_usd": session.tokens.estimated_cost_usd,
+                    "elapsed_seconds": int(time.time() - session.start_time),
+                }))
+                continue
 
             # Step 2: Compute BKT Math
             params = DEPTH_LEVEL_PARAMS[session.current_depth]
@@ -257,8 +295,11 @@ async def interview_websocket(websocket: WebSocket):
             )
             delta = round(next_mastery - session.prior_mastery, 4)
 
+            # OLD CODE:
+            # telemetry = BKTTelemetry(turn_number=session.turn_number, depth_level=session.current_depth, ...)
             telemetry = BKTTelemetry(
                 turn_number=session.turn_number,
+                attempts=session.attempts,  # NEW: Accurate attempt number
                 depth_level=session.current_depth,
                 verdict=grading.verdict,
                 prior=session.prior_mastery,
@@ -269,6 +310,7 @@ async def interview_websocket(websocket: WebSocket):
                 next_mastery=next_mastery,
                 delta=delta,
             )
+
 
             # Step 3: Run Policy Engine
             policy_decision: PolicyDecision = evaluate_policy(
@@ -281,7 +323,7 @@ async def interview_websocket(websocket: WebSocket):
                 has_faced_da=session.has_faced_da,
             )
 
-            if session.is_da_turn and grading.verdict == "correct":
+            if session.is_da_turn and policy_decision.state == "VERIFIED":
                 session.da_defended = True
 
             # Record turn in audit history
@@ -304,7 +346,7 @@ async def interview_websocket(websocket: WebSocket):
                 policy_action=policy_decision.action,
                 policy_reason=policy_decision.reason,
                 pipeline_trace=[
-                    "gemini.grade_answer_with_rubric()",
+                    "gemini.grade_and_detect_skills()",
                     "bkt.update_mastery()",
                     "policy.evaluate_policy()",
                 ],
@@ -352,12 +394,24 @@ async def interview_websocket(websocket: WebSocket):
                         "message": f"Advancing to next queued skill: {session.current_skill}. Locking L1 rubric..."
                     }))
 
-                    session.active_rubric = generate_question_and_rubric(session.current_skill, "L1")
+                    session.active_rubric, p_tok, c_tok = generate_question_and_rubric(
+                        skill=session.current_skill, 
+                        depth_level="L1",
+                        previous_questions=session.asked_questions_history,
+                        candidate_name=session.candidate_name,
+                    )
+                    session.tokens.add(p_tok, c_tok)
+                    session.gemini_calls_count += 1
+                    session.asked_questions_history.append(session.active_rubric.question_text)
 
                     response_payload = TurnResponse(
                         event="turn_completed",
                         session_phase="PRIMARY_SKILL",
                         active_skill=session.current_skill,
+                        attempts=0,
+                        candidate_name=session.candidate_name,
+                        total_backend_calls=session.backend_calls_count,
+                        total_gemini_calls=session.gemini_calls_count,
                         queued_skills=session.skill_queue,
                         completed_skills=session.completed_skills,
                         candidate_answer=candidate_answer,
@@ -369,12 +423,16 @@ async def interview_websocket(websocket: WebSocket):
                         next_question=session.active_rubric.question_text,
                         next_rubric=session.active_rubric,
                         final_report=skill_report,
+                        total_tokens=session.tokens.total_tokens,
+                        estimated_cost_usd=session.tokens.estimated_cost_usd,
+                        elapsed_seconds=int(time.time() - session.start_time),
                     )
                     await websocket.send_text(json.dumps(response_payload.model_dump()))
                     continue
                 else:
                     # All skills completed! Compile MultiSkillDossier
                     session.phase = "COMPLETED"
+                    duration = int(time.time() - session.start_time)
                     dossier = MultiSkillDossier(
                         primary_skills_reports=session.primary_skills_reports,
                         spot_check_records=session.spot_check_records,
@@ -382,13 +440,25 @@ async def interview_websocket(websocket: WebSocket):
                         + [s.skill_name for s in session.spot_check_records if s.final_verdict == "VERIFIED_HANDS_ON"],
                         shallow_skills=[r.skill for r in session.primary_skills_reports if r.final_state == "SHALLOW"],
                         unverified_buzzwords=[s.skill_name for s in session.spot_check_records if s.final_verdict == "UNVERIFIED_BUZZWORD"],
-                        executive_summary=f"Multi-Skill assessment complete. Tested {len(session.completed_skills)} primary skills and {len(session.spot_check_records)} in-flight spot checks.",
+                        executive_summary=f"Multi-Skill assessment complete. Tested {len(session.completed_skills)} primary skills and {len(session.spot_check_records)} spot check(s).",
+                        candidate_name=session.candidate_name,
+                        total_backend_calls=session.backend_calls_count,
+                        total_gemini_calls=session.gemini_calls_count,
+                        total_prompt_tokens=session.tokens.prompt_tokens,
+                        total_completion_tokens=session.tokens.completion_tokens,
+                        total_tokens=session.tokens.total_tokens,
+                        estimated_cost_usd=session.tokens.estimated_cost_usd,
+                        session_duration_seconds=duration,
                     )
 
                     response_payload = TurnResponse(
                         event="turn_completed",
                         session_phase="COMPLETED",
                         active_skill=session.current_skill,
+                        attempts=session.attempts,
+                        candidate_name=session.candidate_name,
+                        total_backend_calls=session.backend_calls_count,
+                        total_gemini_calls=session.gemini_calls_count,
                         queued_skills=[],
                         completed_skills=session.completed_skills,
                         candidate_answer=candidate_answer,
@@ -399,11 +469,14 @@ async def interview_websocket(websocket: WebSocket):
                         skill_state="COMPLETED",
                         final_report=skill_report,
                         multi_skill_dossier=dossier,
+                        total_tokens=session.tokens.total_tokens,
+                        estimated_cost_usd=session.tokens.estimated_cost_usd,
+                        elapsed_seconds=duration,
                     )
                     await websocket.send_text(json.dumps(response_payload.model_dump()))
                     continue
 
-            # Step 5: Normal Next Question Generation (Devil's Advocate or Depth Progression)
+            # Step 5: Normal Next Question Generation
             if policy_decision.action == "TRIGGER_DEVILS_ADVOCATE":
                 await websocket.send_text(json.dumps({
                     "event": "status_update",
@@ -411,11 +484,15 @@ async def interview_websocket(websocket: WebSocket):
                 }))
                 session.is_da_turn = True
                 session.has_faced_da = True
-                next_rubric = generate_devils_advocate_question(
+                next_rubric, p_tok, c_tok = generate_devils_advocate_question(
                     skill=session.current_skill,
                     depth_level=session.current_depth,
                     previous_context=candidate_answer,
+                    candidate_name=session.candidate_name,
                 )
+                session.tokens.add(p_tok, c_tok)
+                session.gemini_calls_count += 1
+                session.asked_questions_history.append(next_rubric.question_text)
             else:
                 session.is_da_turn = False
                 session.current_depth = policy_decision.next_depth
@@ -423,58 +500,85 @@ async def interview_websocket(websocket: WebSocket):
                     "event": "status_update",
                     "message": f"Locking evaluation rubric for {session.current_skill} ({session.current_depth})..."
                 }))
-                next_rubric = generate_question_and_rubric(session.current_skill, session.current_depth)
+                next_rubric, p_tok, c_tok = generate_question_and_rubric(
+                    skill=session.current_skill, 
+                    depth_level=session.current_depth,
+                    previous_questions=session.asked_questions_history,
+                    candidate_name=session.candidate_name,
+                    previous_context=candidate_answer,
+                )
+                session.tokens.add(p_tok, c_tok)
+                session.gemini_calls_count += 1
+                session.asked_questions_history.append(next_rubric.question_text)
 
-            # Step 6: In-Flight Skill Interceptor Scan
-            detected_skills = detect_mentioned_skills(candidate_answer)
+            # Step 6: In-Flight Skill Interceptor (Reads from grading directly, capped to max 1)
+# --- UPDATE NEEDED HERE (BLOCK 3B: PROGRAMMATIC SPOT-CHECK GUARDS) ---
+            # Step 6: In-Flight Skill Interceptor
             surprise_skills = []
-            for s in detected_skills:
-                s_clean = s.strip()
-                s_lower = s_clean.lower()
-                if (
-                    s_lower != session.current_skill.lower()
-                    and s_lower not in [c.lower() for c in session.completed_skills]
-                    and s_lower not in [q.lower() for q in session.skill_queue]
-                    and s_lower not in [sc.skill_name.lower() for sc in session.spot_check_records]
-                ):
-                    surprise_skills.append(s_clean)
+            if session.spot_checks_count < session.max_spot_checks:
+                for s in grading.mentioned_technologies:
+                    s_clean = s.strip()
+                    s_lower = s_clean.lower()
+                    
+                    # Guard 1: Drop submodules, function calls, file formats, or code syntax (e.g. tf.saved_model, torch.nn)
+                    if any(char in s_clean for char in [".", "(", ")", "/", "\\", "_"]):
+                        continue
 
+                    # Guard 2: Drop subcomponents or aliases of current skill (e.g. tensorflow serving vs tensorflow)
+                    current_lower = session.current_skill.lower()
+                    if s_lower == current_lower or s_lower in current_lower or current_lower in s_lower:
+                        continue
+
+                    # Guard 3: Must not be already in queue, completed, or tested
+                    if (
+                        s_lower not in [c.lower() for c in session.completed_skills]
+                        and s_lower not in [q.lower() for q in session.skill_queue]
+                        and s_lower not in [sc.skill_name.lower() for sc in session.spot_check_records]
+                    ):
+                        surprise_skills.append(s_clean)
             if surprise_skills:
-                # Intercept! Pause primary progression and ask Spot-Check Q1
+                # Intercept! Pause primary progression and ask 1 lean spot-check question
                 intercept_skill = surprise_skills[0]
                 session.phase = "SPOT_CHECK"
                 session.paused_primary_rubric = next_rubric
-                session.spot_check_question_index = 1
-                session.active_spot_check = SpotCheckRecord(skill_name=intercept_skill, question_1="")
-
+                session.spot_checks_count += 1
+                session.active_spot_check = SpotCheckRecord(skill_name=intercept_skill, question="")
                 await websocket.send_text(json.dumps({
                     "event": "status_update",
-                    "message": f"⚡ In-flight technology detected: '{intercept_skill}'! Pausing {session.current_skill} for a 2-question hands-on spot-check..."
+                    "message": f"⚡ Unlisted technology detected: '{intercept_skill}'! Pausing {session.current_skill} for a 1-question hands-on spot-check..."
                 }))
-
-                spot_rubric_1 = generate_spot_check_question(
+                spot_rubric, p_tok, c_tok = generate_spot_check_question(
                     skill=intercept_skill,
-                    question_index=1,
                     previous_context=candidate_answer,
+                    candidate_name=session.candidate_name,
                 )
-                session.active_spot_check.question_1 = spot_rubric_1.question_text
-                session.active_rubric = spot_rubric_1
-
+                session.tokens.add(p_tok, c_tok)
+                session.gemini_calls_count += 1
+                session.asked_questions_history.append(spot_rubric.question_text)
+                session.active_spot_check.question = spot_rubric.question_text
+                session.active_rubric = spot_rubric
                 response_payload = TurnResponse(
                     event="turn_completed",
                     session_phase="SPOT_CHECK",
                     active_skill=session.current_skill,
+                    attempts=session.attempts,
+                    candidate_name=session.candidate_name,
+                    total_backend_calls=session.backend_calls_count,
+                    total_gemini_calls=session.gemini_calls_count,
                     queued_skills=session.skill_queue,
                     completed_skills=session.completed_skills,
-                    spot_check_progress=f"Spot-Check 1/2: {intercept_skill}",
+                    spot_check_progress=f"Spot-Check Probe: {intercept_skill}",
                     candidate_answer=candidate_answer,
                     grading=grading,
                     telemetry=telemetry,
                     policy_action="TRIGGER_SPOT_CHECK",
                     policy_reason=f"Candidate casually referenced '{intercept_skill}'. Probing practical hands-on experience.",
                     skill_state=session.state,
-                    next_question=spot_rubric_1.question_text,
-                    next_rubric=spot_rubric_1,
+                    next_question=spot_rubric.question_text,
+                    next_rubric=spot_rubric,
+                    total_tokens=session.tokens.total_tokens,
+                    estimated_cost_usd=session.tokens.estimated_cost_usd,
+                    elapsed_seconds=int(time.time() - session.start_time),
                 )
                 await websocket.send_text(json.dumps(response_payload.model_dump()))
                 continue
@@ -485,6 +589,10 @@ async def interview_websocket(websocket: WebSocket):
                 event="turn_completed",
                 session_phase="PRIMARY_SKILL",
                 active_skill=session.current_skill,
+                attempts=session.attempts,
+                candidate_name=session.candidate_name,
+                total_backend_calls=session.backend_calls_count,
+                total_gemini_calls=session.gemini_calls_count,
                 queued_skills=session.skill_queue,
                 completed_skills=session.completed_skills,
                 candidate_answer=candidate_answer,
@@ -495,8 +603,12 @@ async def interview_websocket(websocket: WebSocket):
                 skill_state=session.state,
                 next_question=next_rubric.question_text,
                 next_rubric=next_rubric,
+                total_tokens=session.tokens.total_tokens,
+                estimated_cost_usd=session.tokens.estimated_cost_usd,
+                elapsed_seconds=int(time.time() - session.start_time),
             )
             await websocket.send_text(json.dumps(response_payload.model_dump()))
+
 
     except WebSocketDisconnect:
         print("[Session Disconnected] Candidate closed connection.")

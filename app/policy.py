@@ -34,27 +34,33 @@ def check_devils_advocate_trigger(
     depth_level: str,
     prior: float,
     next_mastery: float,
-    has_faced_da: bool
+    has_faced_da: bool,
+    attempts: int = 1
 ) -> bool:
     """
     Evaluates Devil's Advocate trigger conditions:
     1. Candidate has not already faced Devil's Advocate in this session.
-    2. Depth level is L3 or L4.
-    3. Triggered if EITHER:
-       a) Steep single-turn surge (Delta >= 0.20) nearing threshold (Mastery >= 0.85)
-       b) Mandatory Senior Gate: Candidate is attempting to EXIT_VERIFIED (Mastery >= 0.85)
-          at L3/L4. Certification is blocked until trade-offs are defended!
+    2. Triggered if EITHER:
+       a) Depth level is L3 or L4 with steep surge (Delta >= 0.20) or near exit (Mastery >= 0.85)
+       b) Candidate reached Mastery >= 0.85 at L2 (or attempt 4) and has not defended DA yet.
+          Guarantees high-scoring candidates get a fair trade-off challenge rather than being branded Shallow!
     """
     if has_faced_da:
         return False
 
-    is_advanced = depth_level in ["L3", "L4"]
     delta = next_mastery - prior
     is_steep_surge = delta >= 0.20
     is_near_exit = next_mastery >= MASTERY_VERIFICATION_THRESHOLD
 
-    # Fires on steep surge OR as mandatory gate before verification
-    return is_advanced and (is_steep_surge or is_near_exit)
+    # Advanced gate: L3/L4 steep surge or near exit
+    if depth_level in ["L3", "L4"] and (is_steep_surge or is_near_exit):
+        return True
+
+    # High-mastery gate: Candidates at L2 reaching >= 0.85 (e.g. 90.2% on Attempt 4)
+    if next_mastery >= MASTERY_VERIFICATION_THRESHOLD:
+        return True
+
+    return False
 
 
 
@@ -69,7 +75,7 @@ def evaluate_policy(
 ) -> PolicyDecision:
     # 1. Handling the outcome of a Devil's Advocate turn
     if is_da_turn:
-        if verdict == "correct":
+        if verdict == "correct" or (verdict == "partial" and next_mastery >= MASTERY_VERIFICATION_THRESHOLD):
             return PolicyDecision(
                 action="EXIT_VERIFIED",
                 next_depth=depth_level,
@@ -79,54 +85,65 @@ def evaluate_policy(
             )
         else:
             return PolicyDecision(
-                action="CONTINUE_SAME_LEVEL",
-                next_depth="L2",  # Gracefully step back or re-probe
-                state="IN_PROGRESS",
+                action="EXIT_SHALLOW",
+                next_depth=depth_level,
+                state="SHALLOW",
                 is_devils_advocate=False,
-                reason="Candidate collapsed under Devil's Advocate probe. Buzzword bluff detected; stepping back."
+                reason="Candidate collapsed under Devil's Advocate cross-examination. Architectural bluff detected; skill concluded as Shallow."
             )
 
-    # 2. Check for Devil's Advocate Trigger
-    if check_devils_advocate_trigger(depth_level, prior, next_mastery, has_faced_da):
+    # 2. Check for Devil's Advocate Trigger (Evaluated BEFORE budget exit so high performers get their DA defense!)
+    if check_devils_advocate_trigger(depth_level, prior, next_mastery, has_faced_da, attempts):
         return PolicyDecision(
             action="TRIGGER_DEVILS_ADVOCATE",
             next_depth=depth_level,
             state="IN_PROGRESS",
             is_devils_advocate=True,
-            reason=f"Steep mastery surge on {depth_level} (Δ={next_mastery - prior:.4f}, Mastery={next_mastery:.4f}). Triggering Devil's Advocate trade-off probe."
+            reason=f"High mastery demonstrated on {depth_level} ({next_mastery*100:.1f}%). Triggering Devil's Advocate trade-off probe to test architectural defense."
         )
 
-        # 3. Check for Mastery Verification Exit
-    # CANDIDATES MUST REACH L3 OR L4 TO BE CERTIFIED! (Cannot verify at L1/L2)
-    if next_mastery >= MASTERY_VERIFICATION_THRESHOLD:
-        if depth_level in ("L3", "L4"):
+    # 3. Check for Max Attempts / Budget Cap
+    if attempts >= MAX_ATTEMPTS_PER_SKILL:
+        if next_mastery >= MASTERY_VERIFICATION_THRESHOLD:
+            # Candidate has high score (>= 85%) - certify as VERIFIED!
             return PolicyDecision(
                 action="EXIT_VERIFIED",
                 next_depth=depth_level,
                 state="VERIFIED",
                 is_devils_advocate=False,
-                reason=f"Candidate demonstrated verified mastery ({next_mastery:.4f}) at architectural depth {depth_level}."
+                reason=f"Candidate achieved verified mastery ({next_mastery*100:.1f}%) across {attempts} questions at {depth_level} level."
             )
         else:
-            # Force escalation to L3 to test architectural depth!
+            # Score remained below 85%
+            return PolicyDecision(
+                action="EXIT_SHALLOW",
+                next_depth=depth_level,
+                state="SHALLOW",
+                is_devils_advocate=False,
+                reason=f"Maximum allowed questions ({MAX_ATTEMPTS_PER_SKILL}) reached. Latent mastery ({next_mastery*100:.1f}%) remained below verification threshold ({MASTERY_VERIFICATION_THRESHOLD*100:.0f}%). Competency ceiling recorded as Shallow."
+            )
+
+    # 4. Check for Mastery Verification Exit (when attempts < 4 and already defended DA)
+    if next_mastery >= MASTERY_VERIFICATION_THRESHOLD:
+        if has_faced_da:
+            return PolicyDecision(
+                action="EXIT_VERIFIED",
+                next_depth=depth_level,
+                state="VERIFIED",
+                is_devils_advocate=False,
+                reason=f"Candidate demonstrated verified mastery ({next_mastery*100:.1f}%) at depth {depth_level} with trade-offs defended."
+            )
+        else:
+            # Escalate depth
             next_depth = "L2" if depth_level == "L1" else "L3"
             return PolicyDecision(
                 action="ESCALATE_DEPTH",
                 next_depth=next_depth,
                 state="IN_PROGRESS",
                 is_devils_advocate=False,
-                reason=f"High foundational mastery ({next_mastery:.4f}). Escalating to {next_depth} to test architectural competency."
+                reason=f"High foundational mastery ({next_mastery*100:.1f}%). Escalating to {next_depth} to test higher-order competency."
             )
 
-    # 4. Check for Max Attempts / Shallow Exit
-    if attempts >= MAX_ATTEMPTS_PER_SKILL:
-        return PolicyDecision(
-            action="EXIT_SHALLOW",
-            next_depth=depth_level,
-            state="SHALLOW",
-            is_devils_advocate=False,
-            reason=f"Max attempts ({MAX_ATTEMPTS_PER_SKILL}) reached without reaching verification threshold. Ceiling recorded as Shallow."
-        )
 
     # 5. Routine Turn: Handle Correct, Partial, and Incorrect
     current_idx = DEPTH_HIERARCHY.index(depth_level) if depth_level in DEPTH_HIERARCHY else 0
@@ -183,5 +200,20 @@ if __name__ == "__main__":
     dec4 = evaluate_policy(depth_level="L1", prior=0.08, next_mastery=0.02, attempts=4, verdict="incorrect")
     print(f"Test 4 (Attempts 4) : State={dec4.state} -> Action={dec4.action} (Expected: SHALLOW)")
     assert dec4.state == "SHALLOW"
+
+    # Test 5: Python Attempt 4 high-mastery case (90.2% on L2) -> Trigger Devil's Advocate!
+    dec5 = evaluate_policy(depth_level="L2", prior=0.781, next_mastery=0.902, attempts=4, verdict="correct", has_faced_da=False)
+    print(f"Test 5 (L2 Attempt 4 High Score): Action={dec5.action} -> DA={dec5.is_devils_advocate} (Expected: TRIGGER_DEVILS_ADVOCATE)")
+    assert dec5.action == "TRIGGER_DEVILS_ADVOCATE" and dec5.is_devils_advocate is True
+
+    # Test 6: Python Turn 5 (DA Defended) -> EXIT_VERIFIED
+    dec6 = evaluate_policy(depth_level="L2", prior=0.902, next_mastery=0.950, attempts=5, verdict="correct", is_da_turn=True, has_faced_da=True)
+    print(f"Test 6 (DA Defense Passed): State={dec6.state} -> Action={dec6.action} (Expected: VERIFIED)")
+    assert dec6.state == "VERIFIED" and dec6.action == "EXIT_VERIFIED"
+
+    # Test 7: Max attempts reached with high mastery after DA faced -> EXIT_VERIFIED (Certified L2 Proficient)
+    dec7 = evaluate_policy(depth_level="L2", prior=0.781, next_mastery=0.902, attempts=4, verdict="correct", has_faced_da=True)
+    print(f"Test 7 (Max Attempts + High Mastery): State={dec7.state} -> Action={dec7.action} (Expected: VERIFIED)")
+    assert dec7.state == "VERIFIED" and dec7.action == "EXIT_VERIFIED"
 
     print("\nSUCCESS: All Policy Engine decisions and Devil's Advocate triggers tested cleanly!")
