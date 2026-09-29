@@ -33,11 +33,11 @@ class KnowledgeGraph:
         self.edges: List[GraphEdge] = []
         self.adjacency: Dict[str, List[GraphEdge]] = {}
 
-    def add_skill(self, skill_code: str, custom_prior: Optional[float] = None) -> BKTNode:
+    def add_skill(self, skill_code: str, custom_prior: Optional[float] = None, description: Optional[str] = None) -> BKTNode:
         """Registers a skill node with its BKT engine."""
         node = BKTNode(skill_code=skill_code, seniority=self.seniority)
-        if custom_prior is not None:
-            node.p_l = max(0.01, min(0.99, custom_prior))
+        if isinstance(custom_prior, (int, float)):
+            node.p_l = max(0.01, min(0.99, float(custom_prior)))
         self.nodes[skill_code] = node
         if skill_code not in self.adjacency:
             self.adjacency[skill_code] = []

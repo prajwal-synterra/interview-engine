@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+app/__pycache__/
+*.ogg
+*.wav
+*.mp3
+logs/*.log
+reports/*.md

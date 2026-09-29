@@ -1,0 +1,2199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomous Socratic Technical Assessment Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #080b11;
+            --panel-bg: #0f1520;
+            --card-bg: #131c2e;
+            --border-color: #1e293b;
+            --border-glow: #38bdf844;
+            --accent-blue: #38bdf8;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #a855f7;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-amber: #f59e0b;
+            --text-primary: #94a3b8;
+            --text-heading: #f8fafc;
+            --ai-bubble: #111827;
+            --user-bubble: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-primary); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Top Header */
+        header {
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-badge { background: linear-gradient(135deg, #0284c7, #38bdf8); color: white; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; letter-spacing: 0.5px; }
+
+        .header-stats {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .stat-badge {
+            background-color: #162032;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 0.78rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .stat-dot.blue { background-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
+        .stat-dot.purple { background-color: var(--accent-purple); box-shadow: 0 0 8px var(--accent-purple); }
+        .stat-dot.green { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+
+        .controls { display: flex; gap: 10px; align-items: center; }
+        select, input[type="text"] { background-color: #080b11; color: var(--text-heading); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; outline: none; }
+        button.btn-start { background: linear-gradient(135deg, #16a34a, #22c55e); color: white; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 0 15px rgba(34, 197, 94, 0.25); }
+
+        /* Main Split Layout */
+        main.split-layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            overflow: hidden;
+        }
+
+        /* LEFT COLUMN: Voice Interview */
+        .left-col {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            background-color: #080b11;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .voice-stage {
+            background: radial-gradient(ellipse at 50% 50%, #0d1527 0%, #080b11 80%);
+            border-bottom: 1px solid var(--border-color);
+            position: relative;
+            padding: 8px 20px 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .stage-meta {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            font-size: 0.78rem;
+            color: #64748b;
+        }
+        .stage-title { font-weight: 600; color: #cbd5e1; display: flex; align-items: center; gap: 8px; }
+        .live-badge { width: 8px; height: 8px; border-radius: 50%; background-color: #64748b; display: inline-block; }
+        .live-badge.speaking { background-color: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); animation: pulse 0.8s infinite; }
+        .live-badge.listening { background-color: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); animation: pulse 1.2s infinite; }
+
+        .wave-canvas-wrapper {
+            width: 100%;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        #wave-canvas { width: 100%; height: 100%; display: block; }
+
+        #chat-container {
+            flex: 1;
+            padding: 18px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .message { max-width: 82%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 0.92rem; }
+        .message.ai { align-self: flex-start; background-color: var(--ai-bubble); border: 1px solid var(--border-color); color: #e2e8f0; border-left: 3px solid var(--accent-cyan); }
+        .message.user { align-self: flex-end; background-color: var(--user-bubble); border: 1px solid #334155; color: #f8fafc; border-right: 3px solid var(--accent-blue); }
+        .message-author { font-size: 0.72rem; font-weight: 600; color: var(--accent-blue); margin-bottom: 5px; display: flex; justify-content: space-between; }
+        .message-body { white-space: pre-wrap; word-break: break-word; }
+        .typing-cursor { display: inline-block; width: 6px; height: 14px; background-color: var(--accent-cyan); vertical-align: middle; margin-left: 4px; animation: blink 0.8s infinite; }
+
+        .left-footer {
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        #live-transcript { font-size: 0.82rem; color: #64748b; font-style: italic; min-height: 16px; }
+        .footer-controls { display: flex; gap: 10px; align-items: center; }
+        #btn-mic {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: #f8fafc;
+            border: 1px solid #475569;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.88rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        #btn-mic.recording {
+            background: linear-gradient(135deg, #b91c1c, #ef4444);
+            border-color: #f87171;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+            animation: pulse 1s infinite;
+        }
+        #btn-interrupt { background-color: #1e293b; color: #f87171; border: 1px solid #ef4444; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: none; }
+        #input-box { flex: 1; background-color: #080b11; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; color: white; outline: none; font-size: 0.9rem; }
+        #btn-send { background: linear-gradient(135deg, #0284c7, #38bdf8); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 0.88rem; cursor: pointer; }
+
+        /* RIGHT COLUMN: Autonomous Engine & Architecture Visualizer */
+        .right-col {
+            display: flex;
+            flex-direction: column;
+            background-color: #090e17;
+            height: 100%;
+            overflow-y: auto;
+            padding: 16px 20px;
+            gap: 16px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 8px;
+        }
+
+        /* Flowchart Container */
+        .flowchart-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+        }
+
+        .flow-hub {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border: 1px solid var(--accent-blue);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.15);
+            border-radius: 8px;
+            padding: 10px 14px;
+            text-align: center;
+        }
+        .flow-hub-title { font-weight: 700; font-size: 0.85rem; color: var(--accent-blue); font-family: 'JetBrains Mono', monospace; }
+        .flow-hub-desc { font-size: 0.72rem; color: #64748b; margin-top: 2px; }
+
+        .flow-arrow-down {
+            display: flex;
+            justify-content: space-around;
+            color: #475569;
+            font-size: 0.8rem;
+            margin: -6px 0;
+        }
+
+        .sub-engines-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+        }
+        .engine-node {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 6px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: all 0.3s;
+        }
+        .engine-node.active {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+            background-color: #162a3f;
+        }
+        .node-name { font-weight: 700; font-size: 0.72rem; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; }
+        .node-metric { font-size: 0.68rem; color: var(--accent-cyan); font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .node-label { font-size: 0.62rem; color: #64748b; }
+
+        /* Dual LLM Architecture Box */
+        .llm-pipeline-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .llm-box {
+            border-radius: 8px;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .llm-box.live {
+            background: linear-gradient(135deg, #0e1e38, #091224);
+            border-color: #1e3a5f;
+        }
+        .llm-box.rest {
+            background: linear-gradient(135deg, #231238, #140924);
+            border-color: #4c1d95;
+        }
+        .llm-box.active {
+            box-shadow: 0 0 14px rgba(168, 85, 247, 0.35);
+        }
+        .llm-title { font-weight: 700; font-size: 0.78rem; display: flex; align-items: center; gap: 6px; }
+        .llm-box.live .llm-title { color: var(--accent-blue); }
+        .llm-box.rest .llm-title { color: var(--accent-purple); }
+        .llm-desc { font-size: 0.7rem; color: #94a3b8; line-height: 1.35; }
+
+        /* Dynamic Rubric Card */
+        .rubric-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .rubric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .rubric-skill-pill {
+            background: #1e293b;
+            color: var(--accent-blue);
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .rubric-observation-badge {
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+        .rubric-observation-badge.pass { background-color: #14532d; color: #86efac; border: 1px solid #22c55e; }
+        .rubric-observation-badge.fail { background-color: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
+
+        .rubric-items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .rubric-item {
+            background-color: #131c2e;
+            border: 1px solid #1e293b;
+            border-radius: 6px;
+            padding: 8px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+        }
+        .rubric-item.passed { border-left: 3px solid var(--accent-green); }
+        .rubric-item.failed { border-left: 3px solid var(--accent-red); }
+        .rubric-criterion { font-weight: 600; color: #f1f5f9; }
+        .rubric-note { font-size: 0.7rem; color: #64748b; margin-top: 2px; }
+
+        .evaluator-summary {
+            background-color: #0b111c;
+            border-left: 3px solid var(--accent-purple);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            line-height: 1.4;
+        }
+
+        /* Skills Progress Matrix */
+        .skills-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .skill-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+        .skill-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .skill-bar-bg {
+            height: 6px;
+            background-color: #1e293b;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .skill-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+
+        /* --- COCKPIT NAVIGATION & TABS --- */
+        .cockpit-nav {
+            display: flex;
+            gap: 4px;
+            background-color: #0b1220;
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .cockpit-tab {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 8px 6px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            font-family: 'Inter', sans-serif;
+            white-space: nowrap;
+        }
+        .cockpit-tab:hover {
+            color: #f1f5f9;
+            background-color: rgba(255, 255, 255, 0.04);
+        }
+        .cockpit-tab.active {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+        }
+
+        /* --- TURN TIMELINE BAR --- */
+        .turn-selector-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 12px;
+            overflow-x: auto;
+        }
+        .turn-bar-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #64748b;
+            font-family: 'JetBrains Mono', monospace;
+            white-space: nowrap;
+        }
+        .turn-chips-container {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            overflow-x: auto;
+        }
+        .turn-chip {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 3px 9px;
+            border-radius: 20px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s;
+        }
+        .turn-chip:hover {
+            border-color: var(--accent-cyan);
+            color: white;
+        }
+        .turn-chip.active {
+            background: #0284c7;
+            border-color: #38bdf8;
+            color: white;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+        }
+
+        /* --- TAB PANES --- */
+        .tab-pane {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .tab-pane.active {
+            display: flex;
+        }
+
+        /* --- FLOW TRACE STAGE CARDS --- */
+        .flow-stage-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .flow-stage-card.highlight {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.2);
+            background: linear-gradient(135deg, rgba(14, 30, 56, 0.7), rgba(9, 18, 36, 0.7));
+        }
+        .stage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stage-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stage-number {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #1e293b;
+            color: var(--accent-cyan);
+            font-size: 0.72rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .stage-title {
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #f1f5f9;
+        }
+        .stage-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .stage-badge.cyan { background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+        .stage-badge.purple { background-color: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .stage-badge.green { background-color: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+        .stage-badge.amber { background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .stage-badge.rose { background-color: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+
+        .stage-body {
+            font-size: 0.78rem;
+            color: #cbd5e1;
+            line-height: 1.45;
+            background: #090e17;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #1e293b;
+        }
+        .stage-subgrid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .subgrid-item {
+            background-color: #0b1220;
+            padding: 6px 8px;
+            border-radius: 5px;
+            border: 1px solid #1e293b;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .subgrid-label { font-size: 0.63rem; color: #64748b; font-family: 'JetBrains Mono', monospace; }
+        .subgrid-value { font-size: 0.76rem; font-weight: 700; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; }
+
+        .flow-connector {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 12px;
+            color: var(--accent-cyan);
+            font-size: 0.75rem;
+            opacity: 0.7;
+        }
+
+        /* --- MATH FORMULA STYLING --- */
+        .math-callout {
+            background: #090e18;
+            border: 1px solid #1e293b;
+            border-left: 3px solid var(--accent-cyan);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            color: #93c5fd;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow-x: auto;
+        }
+        .math-formula {
+            color: #38bdf8;
+            font-weight: 600;
+        }
+        .math-calc-line {
+            color: #e2e8f0;
+            font-size: 0.72rem;
+        }
+
+        /* --- DIRECTIVE HIGHLIGHT BOX --- */
+        .directive-callout {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.7));
+            border: 1px solid #0284c7;
+            border-left: 3px solid #38bdf8;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            color: #e0f2fe;
+            line-height: 1.4;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* --- DEPTH METER BAR --- */
+        .depth-meter-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: #0b1220;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #1e293b;
+        }
+        .depth-meter-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.72rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .depth-bar-bg {
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .depth-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ec4899, #a855f7, #38bdf8);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        /* --- RAW JSON ACCORDION --- */
+        .raw-json-details {
+            background-color: #080d16;
+            border: 1px solid #1e293b;
+            border-radius: 6px;
+            overflow: hidden;
+            font-size: 0.72rem;
+        }
+        .raw-json-summary {
+            padding: 8px 12px;
+            cursor: pointer;
+            color: #94a3b8;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            background: #0d1527;
+        }
+        .raw-json-summary:hover { color: #f1f5f9; }
+        .raw-json-pre {
+            margin: 0;
+            padding: 10px 12px;
+            background: #06090f;
+            color: #38bdf8;
+            font-family: 'JetBrains Mono', monospace;
+            overflow-x: auto;
+            max-height: 220px;
+            line-height: 1.4;
+        }
+
+        /* --- TURN HISTORY CARDS --- */
+        .history-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .history-card:hover {
+            border-color: var(--accent-cyan);
+            background-color: #0f1c30;
+        }
+        .history-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.72rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* Reports Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(4, 7, 13, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-container {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 14px;
+            width: 90vw;
+            max-width: 1100px;
+            height: 88vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.15);
+            overflow: hidden;
+        }
+        .modal-header {
+            background: #131c2e;
+            border-bottom: 1px solid #1e293b;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .modal-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+        .modal-badge {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: white;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+        .modal-tabs {
+            display: flex;
+            gap: 10px;
+        }
+        .modal-tab-btn {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .modal-tab-btn.active {
+            background: #0284c7;
+            border-color: #38bdf8;
+            color: white;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+        }
+        .modal-tab-btn:hover {
+            color: #f1f5f9;
+        }
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            background: #080b11;
+        }
+        .report-content {
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            padding: 24px;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .markdown-rendered {
+            white-space: normal;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.88rem;
+            color: #cbd5e1;
+        }
+        .markdown-rendered h1, .markdown-rendered h2, .markdown-rendered h3, .markdown-rendered h4 {
+            color: #f8fafc;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #1e293b;
+            padding-bottom: 4px;
+        }
+        .markdown-rendered h1 { font-size: 1.3rem; color: var(--accent-cyan); }
+        .markdown-rendered h2 { font-size: 1.1rem; color: var(--accent-blue); }
+        .markdown-rendered h3 { font-size: 0.95rem; color: #cbd5e1; }
+        .markdown-rendered p { margin-bottom: 10px; line-height: 1.6; }
+        .markdown-rendered ul, .markdown-rendered ol { margin-left: 20px; margin-bottom: 12px; }
+        .markdown-rendered li { margin-bottom: 4px; }
+        .markdown-rendered table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; }
+        .markdown-rendered th, .markdown-rendered td { border: 1px solid #334155; padding: 7px 10px; text-align: left; }
+        .markdown-rendered th { background: #1e293b; color: #f1f5f9; }
+        .markdown-rendered blockquote { border-left: 4px solid var(--accent-cyan); padding-left: 12px; margin: 10px 0; color: #94a3b8; font-style: italic; }
+        .markdown-rendered code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent-cyan); }
+        .markdown-rendered pre { background: #080d1a; border: 1px solid #1e293b; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+        .markdown-rendered pre code { background: none; padding: 0; }
+        .markdown-rendered hr { border: none; border-top: 1px solid #1e293b; margin: 18px 0; }
+        .modal-footer {
+            background: #131c2e;
+            border-top: 1px solid #1e293b;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn-modal-action {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-modal-action:hover {
+            border-color: var(--accent-cyan);
+            color: white;
+        }
+        .btn-modal-close {
+            background: #ef4444;
+            border: none;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-modal-close:hover {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header with Telemetry Counters -->
+    <header>
+        <div class="brand">
+            <h2 style="color: var(--text-heading); font-size: 1.05rem;">Autonomous Socratic Engine</h2>
+            <span class="brand-badge">Gemini 3.1 Live + Multi-Agent</span>
+        </div>
+
+        <div class="header-stats">
+            <div class="stat-badge" title="Live audio turns with Gemini 3.1 Live WebSocket">
+                <span class="stat-dot blue"></span>
+                <span>Live Audio: <strong id="stat-live-calls" style="color:var(--accent-blue)">0</strong></span>
+            </div>
+            <div class="stat-badge" title="Async rubric evaluation calls with Gemini REST API">
+                <span class="stat-dot purple"></span>
+                <span>Shadow REST: <strong id="stat-rest-calls" style="color:var(--accent-purple)">0</strong></span>
+            </div>
+            <div class="stat-badge" title="Gemini Live native speech-to-text (audio streamed directly)">
+                <span class="stat-dot green"></span>
+                <span>Gemini STT: <strong id="stat-gemini-stt" style="color:var(--accent-green)">Live</strong></span>
+            </div>
+            <div class="stat-badge">
+                <span>Audio: <strong id="stat-audio-bytes" style="color:#e2e8f0">0 KB</strong></span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="candidate-name" placeholder="Your Name" value="Prajwal" style="width: 100px;">
+            <select id="interview-level">
+                <option value="STUDENT">Student</option>
+                <option value="MEDIUM" selected>Medium</option>
+                <option value="HARD">Hard</option>
+            </select>
+            <button class="btn-start" id="btn-start" onclick="startInterview()">Start Voice Session</button>
+            <button class="btn-end" id="btn-end" onclick="finishInterview()" style="display:none; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);">📑 End & View Reports</button>
+        </div>
+    </header>
+
+    <!-- Main Split-Screen Dashboard -->
+    <main class="split-layout">
+        
+        <!-- LEFT: Voice Interview Studio -->
+        <div class="left-col">
+            <div class="voice-stage">
+                <div class="stage-meta">
+                    <span class="stage-title">
+                        <span class="live-badge" id="live-badge"></span>
+                        <span id="stage-status">Alex standby</span>
+                    </span>
+                    <span id="active-skill-label">Phase: ONBOARDING</span>
+                </div>
+                <div class="wave-canvas-wrapper">
+                    <canvas id="wave-canvas"></canvas>
+                </div>
+            </div>
+
+            <div id="chat-container">
+                <div class="message ai">
+                    <div class="message-author"><span>Alex (AI Interviewer)</span><span>Now</span></div>
+                    <div class="message-body">Welcome, Prajwal! Click <strong>Start Voice Session</strong> above to begin. Tap <strong>Speak (Space)</strong> to answer freely. The live architecture on the right will track your mastery, rubrics, and API calls in real-time.</div>
+                </div>
+            </div>
+
+            <div class="left-footer">
+                <div id="live-transcript">Microphone standby...</div>
+                <div class="footer-controls">
+                    <button class="btn-interrupt" id="btn-interrupt" onclick="interruptAlex()">✋ Interrupt Alex</button>
+                    <button id="btn-mic" onclick="toggleMicrophone()" disabled>🎙️ Tap to Speak (Space)</button>
+                    <input type="text" id="input-box" placeholder="Or type a response and press Enter..." disabled>
+                    <button id="btn-send" onclick="sendManualText()" disabled>Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Live Orchestration Flowchart & Telemetry Cockpit -->
+        <div class="right-col">
+            
+            <!-- Top Cockpit View Navigation -->
+            <div class="cockpit-nav">
+                <button class="cockpit-tab active" id="tab-btn-flow" onclick="switchCockpitTab('flow')">⚡ Live Flow Trace</button>
+                <button class="cockpit-tab" id="tab-btn-rubric" onclick="switchCockpitTab('rubric')">📋 Shadow Rubric & JSON</button>
+                <button class="cockpit-tab" id="tab-btn-math" onclick="switchCockpitTab('math')">🧮 BKT Math & FSM</button>
+                <button class="cockpit-tab" id="tab-btn-history" onclick="switchCockpitTab('history')">📜 Turn History (<span id="tab-turn-count">0</span>)</button>
+            </div>
+
+            <!-- Turn Selector Bar (Inspect Past or Live Active Turn) -->
+            <div class="turn-selector-bar">
+                <span class="turn-bar-label">INSPECT TURN:</span>
+                <div class="turn-chips-container" id="turn-chips-container">
+                    <button class="turn-chip active" id="chip-live" onclick="inspectTurn('latest')">🟢 LIVE (ACTIVE)</button>
+                </div>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- TAB 1: LIVE ALGORITHM FLOW TRACE               -->
+            <!-- ============================================== -->
+            <div class="tab-pane active" id="pane-flow">
+                
+                <div class="section-header">
+                    <span>Multi-Agent Algorithmic Execution Pipeline</span>
+                    <span id="active-hub-status" style="color:var(--accent-cyan); font-family:'JetBrains Mono'">STATUS: STANDBY</span>
+                </div>
+
+                <!-- Stage 1: Candidate Input -->
+                <div class="flow-stage-card" id="flow-card-input">
+                    <div class="stage-header">
+                        <div class="stage-title-wrap">
+                            <span class="stage-number">1</span>
+                            <span class="stage-title">Candidate Answer Input</span>
+                        </div>
+                        <span class="stage-badge cyan" id="flow-input-badge">LATENCY: -- ms</span>
+                    </div>
+                    <div class="stage-body" id="flow-input-text">
+                        Awaiting candidate speech or text response...
+                    </div>
+                </div>
+
+                <div class="flow-connector">↓</div>
+
+                <!-- Stage 2: Shadow LLM Evaluator (Gemini 2.5 REST) -->
+                <div class="flow-stage-card" id="flow-card-shadow">
+                    <div class="stage-header">
+                        <div class="stage-title-wrap">
+                            <span class="stage-number">2</span>
+                            <span class="stage-title">Shadow Evaluator (Gemini 2.5 Flash REST)</span>
+                        </div>
+                        <span class="stage-badge purple" id="flow-shadow-badge">ASYNC (~800ms)</span>
+                    </div>
+                    <div class="stage-body">
+                        <div style="margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                            <strong style="color:var(--accent-purple)" id="flow-shadow-obs">OBSERVATION: PENDING</strong>
+                            <span style="font-family:'JetBrains Mono'; font-size:0.72rem; color:#94a3b8;" id="flow-shadow-depth">DEPTH: --%</span>
+                        </div>
+                        <div id="flow-shadow-summary" style="color:#cbd5e1; font-size:0.75rem;">
+                            Shadow LLM runs quarantined in the background. It calculates candidate depth and evaluates against technical criteria without blocking audio streaming.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-connector">↓</div>
+
+                <!-- Stage 3: BKT Mathematical Update (bkt_engine.py) -->
+                <div class="flow-stage-card" id="flow-card-bkt">
+                    <div class="stage-header">
+                        <div class="stage-title-wrap">
+                            <span class="stage-number">3</span>
+                            <span class="stage-title">BKT Mathematical Engine (bkt_engine.py)</span>
+                        </div>
+                        <span class="stage-badge green" id="flow-bkt-badge">BAYESIAN UPDATE</span>
+                    </div>
+                    <div class="stage-body">
+                        <div class="math-callout">
+                            <div class="math-formula" id="flow-bkt-formula">P(L_t | obs) = [P(L_{t-1}) · P(obs|L)] / P(obs)</div>
+                            <div class="math-calc-line" id="flow-bkt-calc">Prior: P(L) = 0.35  →  Posterior: P(L) = 0.35  (Δ: 0.0000)</div>
+                        </div>
+                        <div class="stage-subgrid">
+                            <div class="subgrid-item">
+                                <span class="subgrid-label">CURRENT SKILL</span>
+                                <span class="subgrid-value" id="flow-bkt-skill">ML_PIPELINES</span>
+                            </div>
+                            <div class="subgrid-item">
+                                <span class="subgrid-label">SLIP / TRANSIT</span>
+                                <span class="subgrid-value" id="flow-bkt-params">Ps: 0.10 | Pt: 0.15</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-connector">↓</div>
+
+                <!-- Stage 4: Policy Router FSM (policy_router.py) -->
+                <div class="flow-stage-card" id="flow-card-policy">
+                    <div class="stage-header">
+                        <div class="stage-title-wrap">
+                            <span class="stage-number">4</span>
+                            <span class="stage-title">FSM Policy Router & Pedagogy (policy_router.py)</span>
+                        </div>
+                        <span class="stage-badge amber" id="flow-policy-badge">DECISION</span>
+                    </div>
+                    <div class="stage-body">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.75rem; font-family:'JetBrains Mono';">
+                            <span>TRANSITION: <strong style="color:var(--accent-cyan)" id="flow-policy-transition">READY → ACTIVE</strong></span>
+                            <span>ACTION: <strong style="color:var(--accent-yellow)" id="flow-policy-action">DIAGNOSTIC</strong></span>
+                        </div>
+                        <div class="directive-callout" id="flow-policy-directive">
+                            [COVERT DIRECTIVE]: System assessing baseline seniority and fundamentals.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-connector">↓</div>
+
+                <!-- Stage 5: Behavioral Proctor (proctor_engine.py) -->
+                <div class="flow-stage-card" id="flow-card-proctor">
+                    <div class="stage-header">
+                        <div class="stage-title-wrap">
+                            <span class="stage-number">5</span>
+                            <span class="stage-title">Behavioral Proctor & Anti-Cheat (proctor_engine.py)</span>
+                        </div>
+                        <span class="stage-badge rose" id="flow-proctor-badge">INTEGRITY</span>
+                    </div>
+                    <div class="stage-body">
+                        <div class="stage-subgrid">
+                            <div class="subgrid-item">
+                                <span class="subgrid-label">INTEGRITY (BII)</span>
+                                <span class="subgrid-value" id="flow-proctor-bii" style="color:var(--accent-green)">0.95 (NOMINAL)</span>
+                            </div>
+                            <div class="subgrid-item">
+                                <span class="subgrid-label">FRAUD RISK SCORE</span>
+                                <span class="subgrid-value" id="flow-proctor-risk">0.05 / 1.00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flow-connector">↓</div>
+
+                <!-- Stage 6: Gemini Live Voice Output -->
+                <div class="flow-stage-card" id="flow-card-live">
+                    <div class="stage-header">
+                        <div class="stage-title-wrap">
+                            <span class="stage-number">6</span>
+                            <span class="stage-title">Gemini Live Audio Synthesis (< 500ms)</span>
+                        </div>
+                        <span class="stage-badge cyan" id="flow-live-badge">BIDIRECTIONAL WEBSOCKET</span>
+                    </div>
+                    <div class="stage-body" id="flow-live-desc">
+                        Alex synthesizes spoken technical response streaming PCM 24kHz audio directly to the candidate's headphones incorporating covert pedagogical guidance.
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============================================== -->
+            <!-- TAB 2: SHADOW RUBRIC & RAW JSON                -->
+            <!-- ============================================== -->
+            <div class="tab-pane" id="pane-rubric">
+                
+                <div class="section-header">
+                    <span>Shadow Evaluator • Dynamic Technical Rubric</span>
+                    <span id="rubric-status-text" style="color:var(--accent-purple); font-family:'JetBrains Mono'">AWAITING TURN</span>
+                </div>
+
+                <div class="rubric-card" id="rubric-container">
+                    <div class="rubric-header">
+                        <span class="rubric-skill-pill" id="rubric-skill">SKILL: ONBOARDING</span>
+                        <span class="rubric-observation-badge pass" id="rubric-obs-badge">OBSERVATION: READY</span>
+                    </div>
+
+                    <!-- Depth Meter Bar -->
+                    <div class="depth-meter-wrap">
+                        <div class="depth-meter-meta">
+                            <span>Concept Depth & Abstraction Score</span>
+                            <span style="color:var(--accent-cyan);" id="rubric-depth-val">--%</span>
+                        </div>
+                        <div class="depth-bar-bg"><div class="depth-bar-fill" id="rubric-depth-bar" style="width: 50%;"></div></div>
+                    </div>
+
+                    <div class="evaluator-summary" id="evaluator-summary">
+                        Shadow Evaluator is listening in the background. As soon as you respond to Alex, Gemini REST evaluates your technical response against specific criteria and updates BKT probability.
+                    </div>
+
+                    <div class="rubric-items-list" id="rubric-items-list">
+                        <div class="rubric-item passed">
+                            <div>
+                                <div class="rubric-criterion">Core Concept Depth</div>
+                                <div class="rubric-note">Underlying principles and architectural abstractions</div>
+                            </div>
+                            <strong style="color:var(--accent-green)">PENDING</strong>
+                        </div>
+                        <div class="rubric-item passed">
+                            <div>
+                                <div class="rubric-criterion">Practical Implementation</div>
+                                <div class="rubric-note">Concrete tools, frameworks, and engineering realities</div>
+                            </div>
+                            <strong style="color:var(--accent-green)">PENDING</strong>
+                        </div>
+                        <div class="rubric-item failed">
+                            <div>
+                                <div class="rubric-criterion">Trade-off & Edge Case Awareness</div>
+                                <div class="rubric-note">System bottlenecks, complexity, and failure modes</div>
+                            </div>
+                            <strong style="color:var(--accent-red)">PENDING</strong>
+                        </div>
+                    </div>
+
+                    <div style="background:#090e17; padding:8px 10px; border-radius:6px; border:1px solid #1e293b; font-size:0.74rem;">
+                        <span style="color:#64748b; font-family:'JetBrains Mono'; font-weight:700;">RECOMMENDED FOLLOW-UP PROBE:</span>
+                        <div id="rubric-probe" style="color:var(--accent-cyan); margin-top:2px; font-style:italic;">Pending evaluation...</div>
+                    </div>
+
+                    <!-- Collapsible Raw JSON Viewer -->
+                    <details class="raw-json-details">
+                        <summary class="raw-json-summary">
+                            <span>🔍 View Raw Structured JSON from Shadow Evaluator</span>
+                            <span style="font-family:'JetBrains Mono'; font-size:0.68rem;">JSON [REST]</span>
+                        </summary>
+                        <pre class="raw-json-pre" id="rubric-raw-json">{\n  "status": "awaiting_turn"\n}</pre>
+                    </details>
+                </div>
+
+            </div>
+
+            <!-- ============================================== -->
+            <!-- TAB 3: BKT MATH & FSM ENGINES                  -->
+            <!-- ============================================== -->
+            <div class="tab-pane" id="pane-math">
+                
+                <div class="section-header">
+                    <span>Bayesian Knowledge Tracing (BKT) Engine</span>
+                    <span style="color:var(--accent-green); font-family:'JetBrains Mono'">bkt_engine.py</span>
+                </div>
+
+                <div class="flowchart-card">
+                    <div class="math-callout">
+                        <span style="color:#64748b; font-size:0.65rem;">POSTERIOR UPDATE EQUATION:</span>
+                        <div class="math-formula">P(L_t | obs=1) = [P(L_{t-1}) · (1 - P_s)] / [P(L_{t-1}) · (1 - P_s) + (1 - P(L_{t-1})) · P_g]</div>
+                        <div class="math-formula">P(L_t | obs=0) = [P(L_{t-1}) · P_s] / [P(L_{t-1}) · P_s + (1 - P(L_{t-1})) · (1 - P_g)]</div>
+                        <span style="color:#64748b; font-size:0.65rem; margin-top:4px;">FORWARD TRANSIT & SCAFFOLDING DECAY:</span>
+                        <div class="math-calc-line">P(L_{t+1}) = P(L_t | obs) + (1 - P(L_t | obs)) · P_t</div>
+                        <div class="math-calc-line">P_effective = P_{prev} + Δ · (0.85^L)</div>
+                    </div>
+
+                    <div class="stage-subgrid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="subgrid-item">
+                            <span class="subgrid-label">PRIOR P(L_{t-1})</span>
+                            <span class="subgrid-value" id="math-prior-val">0.35</span>
+                        </div>
+                        <div class="subgrid-item">
+                            <span class="subgrid-label">OBSERVATION</span>
+                            <span class="subgrid-value" id="math-obs-val">--</span>
+                        </div>
+                        <div class="subgrid-item">
+                            <span class="subgrid-label">POSTERIOR P(L_t)</span>
+                            <span class="subgrid-value" id="math-post-val" style="color:var(--accent-cyan)">0.35</span>
+                        </div>
+                        <div class="subgrid-item">
+                            <span class="subgrid-label">SLIP P_s (DYNAMIC)</span>
+                            <span class="subgrid-value" id="math-slip-val">0.10</span>
+                        </div>
+                        <div class="subgrid-item">
+                            <span class="subgrid-label">TRANSIT P_t</span>
+                            <span class="subgrid-value">0.15</span>
+                        </div>
+                        <div class="subgrid-item">
+                            <span class="subgrid-label">DELTA Δ</span>
+                            <span class="subgrid-value" id="math-delta-val">0.0000</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <span>FSM Policy Router & Directives</span>
+                    <span style="color:var(--accent-yellow); font-family:'JetBrains Mono'">policy_router.py</span>
+                </div>
+
+                <div class="flowchart-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-family:'JetBrains Mono'; font-size:0.75rem;">
+                        <span>STATE: <strong style="color:var(--accent-cyan)" id="math-policy-state">ACTIVE</strong></span>
+                        <span>SCAFFOLDING: <strong style="color:var(--accent-yellow)" id="math-policy-scaffold">L0 (FREE)</strong></span>
+                    </div>
+                    <div class="directive-callout" id="math-policy-directive">
+                        No active prompt intervention. Alex evaluates freely.
+                    </div>
+                </div>
+
+                <div class="section-header">
+                    <span>Knowledge Graph • Skill Mastery Matrix</span>
+                </div>
+
+                <div class="flowchart-card">
+                    <div class="skills-grid" id="skills-matrix">
+                        <div class="skill-row">
+                            <div class="skill-meta">
+                                <span>ML_PIPELINES</span>
+                                <span style="color:var(--accent-cyan)">35% Mastery</span>
+                            </div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width: 35%;"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ============================================== -->
+            <!-- TAB 4: TURN HISTORY AUDIT                      -->
+            <!-- ============================================== -->
+            <div class="tab-pane" id="pane-history">
+                <div class="section-header">
+                    <span>Session Turn Audit Log</span>
+                    <span style="color:#64748b; font-family:'JetBrains Mono'" id="history-total-count">0 TURNS</span>
+                </div>
+                <div id="history-cards-container" style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="color:#64748b; font-size:0.75rem; font-style:italic; padding:12px; text-align:center;">
+                        No turns completed yet. Start the session and speak to record calculations.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Reports Modal -->
+    <div class="modal-overlay" id="reports-modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <span class="modal-title">📑 Technical Evaluation & Growth Reports</span>
+                    <span class="modal-badge">Dual Signal Engine</span>
+                </div>
+                <div class="modal-tabs">
+                    <button class="modal-tab-btn active" id="modal-tab-student" onclick="switchReportTab('student')">🎓 Candidate Career Compass</button>
+                    <button class="modal-tab-btn" id="modal-tab-evaluator" onclick="switchReportTab('evaluator')">🛡️ Hiring Team Forensic Audit</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="report-content" id="modal-report-content">Generating reports...</div>
+            </div>
+            <div class="modal-footer">
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-modal-action" onclick="downloadCurrentReport()">💾 Download Markdown</button>
+                    <button class="btn-modal-action" onclick="copyCurrentReport()">📋 Copy to Clipboard</button>
+                </div>
+                <button class="btn-modal-close" onclick="closeReportsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let audioCtx = null;
+        let analyser = null;
+        let freqData = null;
+        let nextPlayTime = 0;
+        let activeAudioSources = [];
+        let isSessionActive = false;
+        let isAlexSpeaking = false;
+        let currentAiMessageBody = null;
+        let currentAiCursor = null;
+
+        // Streaming PCM audio variables (no Whisper — audio goes directly to Gemini Live)
+        let mediaStream = null;
+        let micAudioCtx = null;
+        let micAnalyser = null;
+        let micDataArray = null;
+        let micProcessor = null;
+        let isRecording = false;
+        let isStreaming = false;
+
+        // --- Waveform Canvas Visualizer ---
+        const canvas = document.getElementById("wave-canvas");
+        const ctx = canvas.getContext("2d");
+        let wavePhase = 0;
+        let currentAmp = 4;
+
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+
+        function drawGlowingWave() {
+            requestAnimationFrame(drawGlowingWave);
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerY = height / 2;
+
+            ctx.clearRect(0, 0, width, height);
+
+            let targetAmp = 3.0;
+            if (analyser && isAlexSpeaking) {
+                analyser.getByteFrequencyData(freqData);
+                let sum = 0;
+                for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+                targetAmp = Math.max(4.0, (sum / freqData.length / 255.0) * 44.0);
+            } else if (micAnalyser && isRecording) {
+                micAnalyser.getByteFrequencyData(micDataArray);
+                let sum = 0;
+                for (let i = 0; i < micDataArray.length; i++) sum += micDataArray[i];
+                targetAmp = Math.max(3.0, (sum / micDataArray.length / 255.0) * 38.0);
+            }
+
+            currentAmp += (targetAmp - currentAmp) * 0.15;
+            wavePhase += isAlexSpeaking ? 0.06 : 0.025;
+
+            // Baseline laser beam
+            ctx.save();
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = "#38bdf8";
+            ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(width, centerY);
+            ctx.stroke();
+
+            // Ribbons
+            ctx.globalCompositeOperation = "lighter";
+            const ribbons = [
+                { color: "rgba(56, 189, 248, 0.55)", freq: 0.016, speed: 1.0, phaseOffset: 0.0, lineWidth: 2.5 },
+                { color: "rgba(168, 85, 247, 0.50)", freq: 0.022, speed: 0.8, phaseOffset: 1.6, lineWidth: 2.0 },
+                { color: "rgba(244, 114, 182, 0.40)", freq: 0.019, speed: 1.2, phaseOffset: 3.2, lineWidth: 1.8 },
+                { color: "rgba(255, 255, 255, 0.75)", freq: 0.014, speed: 0.9, phaseOffset: 0.8, lineWidth: 1.5 }
+            ];
+
+            ribbons.forEach(ribbon => {
+                ctx.beginPath();
+                ctx.strokeStyle = ribbon.color;
+                ctx.lineWidth = ribbon.lineWidth;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = ribbon.color;
+
+                for (let x = 0; x <= width; x += 3) {
+                    const normX = x / width;
+                    const envelope = Math.sin(Math.PI * normX) ** 2;
+                    const angle = x * ribbon.freq + (wavePhase * ribbon.speed) + ribbon.phaseOffset;
+                    const waveY = centerY + Math.sin(angle) * currentAmp * envelope;
+                    if (x === 0) ctx.moveTo(x, waveY);
+                    else ctx.lineTo(x, waveY);
+                }
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+        drawGlowingWave();
+
+        // --- Audio Output Engine ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 128;
+                analyser.smoothingTimeConstant = 0.82;
+                analyser.connect(audioCtx.destination);
+                freqData = new Uint8Array(analyser.frequencyBinCount);
+            }
+            if (audioCtx.state === "suspended") audioCtx.resume();
+        }
+
+        function playPCMChunk(arrayBuffer) {
+            initAudio();
+            isAlexSpeaking = true;
+            document.getElementById("btn-interrupt").style.display = "inline-block";
+            setStageStatus("Alex speaking...", "speaking");
+            highlightEngineNode("node-gemini-live");
+
+            const pcmData = new Int16Array(arrayBuffer);
+            const floatData = new Float32Array(pcmData.length);
+            for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 32768.0;
+
+            const buffer = audioCtx.createBuffer(1, floatData.length, 24000);
+            buffer.getChannelData(0).set(floatData);
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(analyser);
+
+            const currentTime = audioCtx.currentTime;
+            if (nextPlayTime < currentTime) nextPlayTime = currentTime;
+            source.start(nextPlayTime);
+            nextPlayTime += buffer.duration;
+
+            activeAudioSources.push(source);
+            source.onended = () => {
+                activeAudioSources = activeAudioSources.filter(s => s !== source);
+                if (activeAudioSources.length === 0) {
+                    isAlexSpeaking = false;
+                    document.getElementById("btn-interrupt").style.display = "none";
+                    setStageStatus("Alex finished. Tap Speak to respond.", "listening");
+                    document.getElementById("live-transcript").textContent = "Alex finished. Tap 'Speak' (or press Space) to answer...";
+                    if (currentAiCursor) { currentAiCursor.remove(); currentAiCursor = null; }
+                }
+            };
+        }
+
+        function interruptAlex() {
+            if (activeAudioSources.length > 0) {
+                activeAudioSources.forEach(s => { try { s.stop(); } catch (e) {} });
+                activeAudioSources = [];
+                nextPlayTime = 0;
+            }
+            isAlexSpeaking = false;
+            document.getElementById("btn-interrupt").style.display = "none";
+            setStageStatus("Interrupted Alex.", "listening");
+            document.getElementById("live-transcript").textContent = "Alex paused. Tap Speak to answer...";
+            if (currentAiCursor) { currentAiCursor.remove(); currentAiCursor = null; }
+        }
+
+        function setStageStatus(text, type = "default") {
+            const statusLabel = document.getElementById("stage-status");
+            const badge = document.getElementById("live-badge");
+            statusLabel.textContent = text;
+            badge.className = "live-badge";
+            if (type === "speaking") badge.classList.add("speaking");
+            if (type === "listening") badge.classList.add("listening");
+        }
+
+        // --- Microphone Management: Stream raw 16kHz PCM directly to server ---
+        let speechRec = null;
+        let clientLiveTranscript = "";
+        let finalSpeechAccumulator = "";
+
+        function setupSpeechRecognition() {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) return;
+            try {
+                speechRec = new SpeechRec();
+                speechRec.continuous = true;
+                speechRec.interimResults = true;
+                speechRec.lang = "en-US";
+
+                speechRec.onresult = (event) => {
+                    let interim = "";
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        if (event.results[i].isFinal) {
+                            finalSpeechAccumulator += event.results[i][0].transcript + " ";
+                        } else {
+                            interim += event.results[i][0].transcript;
+                        }
+                    }
+                    clientLiveTranscript = (finalSpeechAccumulator + interim).trim();
+                    if (clientLiveTranscript && isStreaming) {
+                        document.getElementById("live-transcript").innerHTML = `🎙️ <strong style="color:var(--accent-cyan)">Live Words:</strong> "${clientLiveTranscript}"`;
+                    }
+                };
+
+                // Watchdog: If browser cuts off recognition on a pause while candidate is still speaking, auto-restart!
+                speechRec.onend = () => {
+                    if (isStreaming && isRecording) {
+                        console.log("[Watchdog] SpeechRecognition auto-restarting to keep listening...");
+                        try { speechRec.start(); } catch (e) {}
+                    }
+                };
+
+                speechRec.onerror = (e) => {
+                    console.warn("[SpeechRec Warning]", e.error);
+                    if (isStreaming && isRecording && e.error !== 'aborted') {
+                        try { speechRec.start(); } catch (err) {}
+                    }
+                };
+            } catch (err) {
+                console.warn("[SpeechRec Init Error]", err);
+            }
+        }
+
+        // Linear interpolation resampler for browser mic sampleRate -> 16000 Hz
+        function resampleTo16k(inputData, inputSampleRate) {
+            if (inputSampleRate === 16000) return inputData;
+            const ratio = inputSampleRate / 16000;
+            const newLength = Math.round(inputData.length / ratio);
+            const result = new Float32Array(newLength);
+            for (let i = 0; i < newLength; i++) {
+                const originIndex = i * ratio;
+                const indexPrev = Math.floor(originIndex);
+                const indexNext = Math.min(indexPrev + 1, inputData.length - 1);
+                const fraction = originIndex - indexPrev;
+                result[i] = inputData[indexPrev] * (1 - fraction) + inputData[indexNext] * fraction;
+            }
+            return result;
+        }
+
+        async function setupNativeMicrophone() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        channelCount: 1
+                    }
+                });
+                micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log(`[Audio] Mic context initialized at native sample rate: ${micAudioCtx.sampleRate} Hz`);
+                const micSource = micAudioCtx.createMediaStreamSource(mediaStream);
+
+                // Visualizer analyser
+                micAnalyser = micAudioCtx.createAnalyser();
+                micAnalyser.fftSize = 256;
+                micAnalyser.smoothingTimeConstant = 0.5;
+                micSource.connect(micAnalyser);
+                micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+                // ScriptProcessorNode to capture raw PCM, resample to 16kHz, and stream to server
+                micProcessor = micAudioCtx.createScriptProcessor(4096, 1, 1);
+                micProcessor.onaudioprocess = (e) => {
+                    if (!isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+                    const float32 = e.inputBuffer.getChannelData(0);
+                    // Resample to exact 16000 Hz for Gemini Live
+                    const resampled = resampleTo16k(float32, micAudioCtx.sampleRate);
+                    // Convert Float32 [-1,1] to Int16 PCM Little-Endian
+                    const int16 = new Int16Array(resampled.length);
+                    for (let i = 0; i < resampled.length; i++) {
+                        int16[i] = Math.max(-32768, Math.min(32767, Math.round(resampled[i] * 32767)));
+                    }
+                    ws.send(int16.buffer);
+                };
+                micSource.connect(micProcessor);
+
+                // Mute local monitor loop to prevent feedback/echo
+                const zeroGain = micAudioCtx.createGain();
+                zeroGain.gain.value = 0;
+                micProcessor.connect(zeroGain);
+                zeroGain.connect(micAudioCtx.destination);
+
+                setupSpeechRecognition();
+            } catch (err) {
+                alert("Microphone permission required: " + err.message);
+            }
+        }
+
+        function toggleMicrophone() {
+            if (!isSessionActive || isAlexSpeaking) return;
+
+            const btn = document.getElementById("btn-mic");
+            if (!isStreaming) {
+                // Start streaming raw PCM to server
+                isStreaming = true;
+                isRecording = true;
+                finalSpeechAccumulator = "";
+                clientLiveTranscript = "";
+                if (micAudioCtx && micAudioCtx.state === 'suspended') micAudioCtx.resume();
+                btn.classList.add("recording");
+                btn.textContent = "⏹️ Done Speaking (Send)";
+                setStageStatus("Streaming audio to Gemini Live...", "listening");
+                document.getElementById("live-transcript").innerHTML = "🎙️ <strong style=\"color:var(--accent-cyan)\">Listening...</strong> Start speaking your answer now.";
+
+                if (speechRec) {
+                    try { speechRec.start(); } catch (e) {}
+                }
+            } else {
+                // Stop streaming and send end_of_speech signal
+                isStreaming = false;
+                isRecording = false;
+                if (speechRec) {
+                    try { speechRec.stop(); } catch (e) {}
+                }
+                btn.classList.remove("recording");
+                btn.textContent = "🎙️ Tap to Speak (Space)";
+                setStageStatus("Gemini processing your response...", "speaking");
+                document.getElementById("live-transcript").innerHTML = "⚡ <em>Gemini Live finalizing transcription and evaluating answer...</em>";
+
+                const submittedTranscript = (finalSpeechAccumulator + " " + clientLiveTranscript).trim();
+
+                // Signal the server that candidate finished speaking, passing full accumulated transcript
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        event: "end_of_speech",
+                        transcript: submittedTranscript
+                    }));
+                }
+            }
+        }
+
+        function sendManualText() {
+            const input = document.getElementById("input-box");
+            const text = input.value.trim();
+            if (text.length > 0) {
+                appendUserMessage(text);
+                input.value = "";
+                ws.send(JSON.stringify({ text: text }));
+                setStageStatus("Alex thinking...", "speaking");
+            }
+        }
+
+        // --- Chat Bubbles ---
+        function startNewAiBubble() {
+            const container = document.getElementById("chat-container");
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message ai";
+            const authorDiv = document.createElement("div");
+            authorDiv.className = "message-author";
+            authorDiv.innerHTML = `<span>Alex (AI Interviewer)</span><span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>`;
+            currentAiMessageBody = document.createElement("div");
+            currentAiMessageBody.className = "message-body";
+            currentAiCursor = document.createElement("span");
+            currentAiCursor.className = "typing-cursor";
+
+            msgDiv.appendChild(authorDiv);
+            msgDiv.appendChild(currentAiMessageBody);
+            msgDiv.appendChild(currentAiCursor);
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function appendUserMessage(text) {
+            const container = document.getElementById("chat-container");
+            const msgDiv = document.createElement("div");
+            msgDiv.className = "message user";
+            const authorDiv = document.createElement("div");
+            authorDiv.className = "message-author";
+            authorDiv.innerHTML = `<span>You (Candidate)</span><span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>`;
+            const bodyDiv = document.createElement("div");
+            bodyDiv.className = "message-body";
+            bodyDiv.textContent = text;
+
+            msgDiv.appendChild(authorDiv);
+            msgDiv.appendChild(bodyDiv);
+            container.appendChild(msgDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- Node Highlighting Animation ---
+        function highlightEngineNode(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.classList.add("active");
+                setTimeout(() => el.classList.remove("active"), 1200);
+            }
+        }
+
+        // --- WebSocket Telemetry Integration ---
+        async function startInterview() {
+            initAudio();
+            await setupNativeMicrophone();
+
+            const level = document.getElementById("interview-level").value;
+            const name = document.getElementById("candidate-name").value || "Candidate";
+            const btnStart = document.getElementById("btn-start");
+
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws/interview`);
+            ws.binaryType = "arraybuffer";
+
+            ws.onopen = () => {
+                isSessionActive = true;
+                ws.send(JSON.stringify({ level: level, name: name }));
+                document.getElementById("btn-mic").disabled = false;
+                document.getElementById("input-box").disabled = false;
+                document.getElementById("btn-send").disabled = false;
+                btnStart.disabled = true;
+                btnStart.textContent = "🟢 Session Live";
+                btnStart.style.background = "#1e293b";
+                btnStart.style.boxShadow = "none";
+                const btnEnd = document.getElementById("btn-end");
+                if (btnEnd) {
+                    btnEnd.style.display = "inline-block";
+                    btnEnd.disabled = false;
+                    btnEnd.textContent = "📑 End & View Reports";
+                }
+                setStageStatus("Connecting to Alex...", "speaking");
+            };
+
+            ws.onmessage = (event) => {
+                if (event.data instanceof ArrayBuffer) {
+                    if (isRecording) {
+                        // Candidate is actively speaking: ignore incoming audio packets so candidate is never interrupted
+                        return;
+                    }
+                    playPCMChunk(event.data);
+                } else {
+                    const data = JSON.parse(event.data);
+
+                    if (data.event === "ai_turn_start") {
+                        startNewAiBubble();
+                    } else if (data.event === "ai_transcript_chunk") {
+                        if (currentAiMessageBody) {
+                            currentAiMessageBody.textContent += data.text;
+                            document.getElementById("chat-container").scrollTop = document.getElementById("chat-container").scrollHeight;
+                        }
+                    } else if (data.event === "candidate_interim_transcript") {
+                        // Live interim stream from Gemini STT while speaking
+                        document.getElementById("live-transcript").innerHTML = `🎙️ <strong style="color:var(--accent-cyan)">Gemini STT:</strong> "${data.text}"`;
+                    } else if (data.event === "candidate_transcript_chunk") {
+                        // Finalized phrase from Gemini STT
+                        document.getElementById("live-transcript").innerHTML = `🎙️ <strong style="color:var(--accent-cyan)">Gemini STT:</strong> "${data.text}"`;
+                    } else if (data.event === "candidate_transcript") {
+                        appendUserMessage(data.text);
+                        document.getElementById("live-transcript").innerHTML = `✅ <strong style="color:var(--accent-green)">Answer Recorded:</strong> "${data.text}"`;
+                    } else if (data.event === "no_speech_detected") {
+                        setStageStatus("No speech heard. Tap Speak to try again.", "listening");
+                        document.getElementById("live-transcript").innerHTML = "⚠️ <strong style=\"color:var(--accent-yellow)\">No speech detected.</strong> Please tap Speak, speak clearly into your mic, and tap Done Speaking.";
+                    } else if (data.event === "turn_complete") {
+                        if (currentAiCursor) {
+                            currentAiCursor.remove();
+                            currentAiCursor = null;
+                        }
+                    } else if (data.event === "telemetry_update") {
+                        updateLiveTelemetry(data.telemetry, data.active_module);
+                    } else if (data.event === "reports_generated") {
+                        showReportsModal(data.student_report, data.evaluator_report);
+                    }
+                }
+            };
+
+            ws.onclose = () => {
+                isSessionActive = false;
+                setStageStatus("Session Disconnected", "default");
+            };
+        }
+
+        // --- COCKPIT NAVIGATION & TURN INSPECTOR ENGINE ---
+        let sessionTurnsHistory = [];
+        let latestTurnAudit = null;
+        let selectedTurnKey = 'latest';
+
+        function switchCockpitTab(tabKey) {
+            const tabs = ['flow', 'rubric', 'math', 'history'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const pane = document.getElementById(`pane-${t}`);
+                if (btn) btn.classList.toggle('active', t === tabKey);
+                if (pane) pane.classList.toggle('active', t === tabKey);
+            });
+        }
+
+        function highlightCard(cardId) {
+            const el = document.getElementById(cardId);
+            if (el) {
+                el.classList.add("highlight");
+                setTimeout(() => el.classList.remove("highlight"), 1400);
+            }
+        }
+
+        function inspectTurn(turnKey) {
+            selectedTurnKey = turnKey;
+            // Update chip active classes
+            document.querySelectorAll(".turn-chip").forEach(chip => chip.classList.remove("active"));
+            const activeChip = document.getElementById(turnKey === 'latest' ? 'chip-live' : `chip-turn-${turnKey}`);
+            if (activeChip) activeChip.classList.add("active");
+
+            let targetAudit = null;
+            if (turnKey === 'latest') {
+                targetAudit = latestTurnAudit || (sessionTurnsHistory.length > 0 ? sessionTurnsHistory[sessionTurnsHistory.length - 1] : null);
+            } else if (typeof turnKey === 'number' && sessionTurnsHistory[turnKey]) {
+                targetAudit = sessionTurnsHistory[turnKey];
+            }
+            if (targetAudit) {
+                renderTurnAudit(targetAudit, turnKey === 'latest');
+            }
+        }
+
+        function renderTurnAudit(audit, isLive = false) {
+            if (!audit) return;
+
+            // 1. Stage 1: Candidate Input
+            const inputEl = document.getElementById("flow-input-text");
+            const candidateText = audit.candidate_input || audit.candidate_answer || "";
+            if (inputEl) inputEl.textContent = candidateText ? `"${candidateText}"` : "Awaiting candidate speech response...";
+            const inputBadge = document.getElementById("flow-input-badge");
+            const latVal = audit.latency_ms ?? (audit.proctor ? audit.proctor.latency_ms : null);
+            if (inputBadge) inputBadge.textContent = latVal ? `LATENCY: ${latVal} ms` : "LATENCY: -- ms";
+
+            // 2. Stage 2: Shadow Evaluator
+            const obsEl = document.getElementById("flow-shadow-obs");
+            if (obsEl && audit.evaluator) {
+                const isPass = audit.evaluator.observation === 1;
+                obsEl.textContent = `OBSERVATION: ${isPass ? '1 (SOLID PASS)' : '0 (NEEDS DEPTH)'}`;
+                obsEl.style.color = isPass ? 'var(--accent-green)' : 'var(--accent-red)';
+            }
+            const depthEl = document.getElementById("flow-shadow-depth");
+            let rawDepth = audit.evaluator ? audit.evaluator.depth_score : 0.5;
+            if (rawDepth > 1.0) rawDepth = rawDepth / 100.0;
+            const depthPct = Math.min(100, Math.max(0, Math.round(rawDepth * 100)));
+            if (depthEl) {
+                depthEl.textContent = `DEPTH: ${depthPct}%`;
+            }
+            const summaryEl = document.getElementById("flow-shadow-summary");
+            if (summaryEl && audit.evaluator && audit.evaluator.summary) {
+                summaryEl.textContent = audit.evaluator.summary;
+            }
+
+            // 3. Stage 3: BKT Math
+            if (audit.bkt) {
+                const priorValNum = audit.bkt.prior ?? audit.bkt.prior_mastery ?? 0.35;
+                const postValNum = audit.bkt.posterior ?? audit.bkt.posterior_mastery ?? audit.bkt.effective_mastery ?? 0.35;
+                const slipValNum = audit.bkt.slip_used ?? audit.bkt.p_s ?? 0.10;
+                const transitValNum = audit.bkt.transit ?? audit.bkt.p_t ?? 0.15;
+                const deltaValNum = audit.bkt.delta ?? +(postValNum - priorValNum).toFixed(4);
+
+                const formulaEl = document.getElementById("flow-bkt-formula");
+                if (formulaEl) formulaEl.textContent = audit.bkt.formula || `P(L_t | obs) = [P(L_{t-1}) · P(obs|L)] / P(obs)`;
+                const calcEl = document.getElementById("flow-bkt-calc");
+                if (calcEl) {
+                    const deltaPrefix = deltaValNum >= 0 ? '+' : '';
+                    calcEl.textContent = `Prior: P(L) = ${priorValNum}  →  Posterior: P(L) = ${postValNum}  (Δ: ${deltaPrefix}${deltaValNum})`;
+                }
+                const skillEl = document.getElementById("flow-bkt-skill");
+                if (skillEl) skillEl.textContent = audit.bkt.skill;
+                const paramsEl = document.getElementById("flow-bkt-params");
+                if (paramsEl) paramsEl.textContent = `Ps: ${slipValNum} | Pt: ${transitValNum}`;
+
+                // Math tab values
+                const priorVal = document.getElementById("math-prior-val");
+                if (priorVal) priorVal.textContent = priorValNum;
+                const obsVal = document.getElementById("math-obs-val");
+                if (obsVal) obsVal.textContent = audit.evaluator ? audit.evaluator.observation : '--';
+                const postVal = document.getElementById("math-post-val");
+                if (postVal) postVal.textContent = postValNum;
+                const slipVal = document.getElementById("math-slip-val");
+                if (slipVal) slipVal.textContent = slipValNum;
+                const deltaVal = document.getElementById("math-delta-val");
+                if (deltaVal) deltaVal.textContent = `${deltaValNum >= 0 ? '+' : ''}${deltaValNum}`;
+            }
+
+            // 4. Stage 4: Policy FSM
+            if (audit.policy) {
+                const transEl = document.getElementById("flow-policy-transition");
+                if (transEl) transEl.textContent = `${audit.policy.previous_state} → ${audit.policy.current_state}`;
+                const actEl = document.getElementById("flow-policy-action");
+                if (actEl) actEl.textContent = `${audit.policy.next_action} (L${audit.policy.scaffolding_level})`;
+                const dirEl = document.getElementById("flow-policy-directive");
+                if (dirEl) dirEl.textContent = `[DIRECTIVE]: ${audit.policy.prompt_directive}`;
+
+                const mathState = document.getElementById("math-policy-state");
+                if (mathState) mathState.textContent = audit.policy.current_state;
+                const mathScaffold = document.getElementById("math-policy-scaffold");
+                if (mathScaffold) mathScaffold.textContent = `L${audit.policy.scaffolding_level} (${audit.policy.next_action})`;
+                const mathDirective = document.getElementById("math-policy-directive");
+                if (mathDirective) mathDirective.textContent = audit.policy.prompt_directive;
+            }
+
+            // 5. Stage 5: Proctor
+            if (audit.proctor) {
+                const biiEl = document.getElementById("flow-proctor-bii");
+                if (biiEl) {
+                    biiEl.textContent = `${audit.proctor.bii} (${audit.proctor.status})`;
+                    biiEl.style.color = audit.proctor.status === "NOMINAL" ? "var(--accent-green)" : "var(--accent-red)";
+                }
+                const riskEl = document.getElementById("flow-proctor-risk");
+                if (riskEl) riskEl.textContent = `${audit.proctor.fraud_risk_score} / 1.00`;
+            }
+
+            // 6. Rubric Tab updates
+            const rubricStatus = document.getElementById("rubric-status-text");
+            if (rubricStatus) rubricStatus.textContent = isLive ? "LIVE TURN EVALUATION" : `INSPECTING TURN #${audit.turn_index}`;
+            const rubricSkill = document.getElementById("rubric-skill");
+            if (rubricSkill && audit.bkt) rubricSkill.textContent = `SKILL: ${audit.bkt.skill}`;
+
+            if (audit.evaluator) {
+                const obsBadge = document.getElementById("rubric-obs-badge");
+                if (obsBadge) {
+                    if (audit.evaluator.observation === 1) {
+                        obsBadge.textContent = "OBSERVATION: 1 (PASSED)";
+                        obsBadge.className = "rubric-observation-badge pass";
+                    } else {
+                        obsBadge.textContent = "OBSERVATION: 0 (STRUGGLING)";
+                        obsBadge.className = "rubric-observation-badge fail";
+                    }
+                }
+
+                let rubDepth = audit.evaluator ? audit.evaluator.depth_score : 0.5;
+                if (rubDepth > 1.0) rubDepth = rubDepth / 100.0;
+                const rubDepthPct = Math.min(100, Math.max(0, Math.round(rubDepth * 100)));
+                const rubricDepthVal = document.getElementById("rubric-depth-val");
+                if (rubricDepthVal) rubricDepthVal.textContent = `${rubDepthPct}%`;
+                const rubricDepthBar = document.getElementById("rubric-depth-bar");
+                if (rubricDepthBar) rubricDepthBar.style.width = `${rubDepthPct}%`;
+
+                const evalSumm = document.getElementById("evaluator-summary");
+                if (evalSumm && audit.evaluator.summary) evalSumm.textContent = audit.evaluator.summary;
+
+                const probeEl = document.getElementById("rubric-probe");
+                if (probeEl) probeEl.textContent = audit.evaluator.recommended_probe || "Standard Socratic dialogue progression.";
+
+                // Rubric items list
+                const itemsList = document.getElementById("rubric-items-list");
+                if (itemsList && audit.evaluator.rubric_items && audit.evaluator.rubric_items.length > 0) {
+                    itemsList.innerHTML = "";
+                    audit.evaluator.rubric_items.forEach(item => {
+                        const div = document.createElement("div");
+                        div.className = `rubric-item ${item.passed ? 'passed' : 'failed'}`;
+                        div.innerHTML = `
+                            <div>
+                                <div class="rubric-criterion">${item.criterion}</div>
+                                <div class="rubric-note">${item.note || ''}</div>
+                            </div>
+                            <strong style="color:${item.passed ? 'var(--accent-green)' : 'var(--accent-red)'}">
+                                ${item.passed ? 'PASS (1.0)' : 'GAP (0.0)'}
+                            </strong>
+                        `;
+                        itemsList.appendChild(div);
+                    });
+                }
+
+                // Collapsible Raw JSON
+                const rawJsonEl = document.getElementById("rubric-raw-json");
+                if (rawJsonEl) {
+                    const rawData = audit.evaluator.raw_json || audit;
+                    rawJsonEl.textContent = JSON.stringify(rawData, null, 2);
+                }
+            }
+        }
+
+        function renderTurnChips() {
+            const container = document.getElementById("turn-chips-container");
+            if (!container) return;
+            container.innerHTML = "";
+
+            // Live active chip
+            const liveBtn = document.createElement("button");
+            liveBtn.id = "chip-live";
+            liveBtn.className = `turn-chip ${selectedTurnKey === 'latest' ? 'active' : ''}`;
+            liveBtn.textContent = "🟢 LIVE (ACTIVE)";
+            liveBtn.onclick = () => inspectTurn('latest');
+            container.appendChild(liveBtn);
+
+            // History chips
+            sessionTurnsHistory.forEach((t, idx) => {
+                const btn = document.createElement("button");
+                btn.id = `chip-turn-${idx}`;
+                btn.className = `turn-chip ${selectedTurnKey === idx ? 'active' : ''}`;
+                const obsTag = t.evaluator && t.evaluator.observation === 1 ? 'PASS' : 'GAP';
+                const skillTag = t.bkt && t.bkt.skill ? t.bkt.skill.substring(0, 6) : `T${idx+1}`;
+                btn.textContent = `Turn #${t.turn_index || idx+1} (${skillTag}: ${obsTag})`;
+                btn.onclick = () => inspectTurn(idx);
+                container.appendChild(btn);
+            });
+        }
+
+        function renderHistoryCards() {
+            const container = document.getElementById("history-cards-container");
+            if (!container) return;
+            if (sessionTurnsHistory.length === 0) {
+                container.innerHTML = `<div style="color:#64748b; font-size:0.75rem; font-style:italic; padding:12px; text-align:center;">No turns completed yet. Start the session and speak to record calculations.</div>`;
+                return;
+            }
+
+            container.innerHTML = "";
+            sessionTurnsHistory.forEach((t, idx) => {
+                const card = document.createElement("div");
+                card.className = "history-card";
+                card.onclick = () => {
+                    inspectTurn(idx);
+                    switchCockpitTab('flow');
+                };
+
+                const obsPass = t.evaluator && t.evaluator.observation === 1;
+                const obsBadgeHtml = obsPass 
+                    ? `<span class="stage-badge green">PASS (1.0)</span>` 
+                    : `<span class="stage-badge rose">GAP (0.0)</span>`;
+                let cardDepth = t.evaluator ? t.evaluator.depth_score : 0.5;
+                if (cardDepth > 1.0) cardDepth = cardDepth / 100.0;
+                const depthPct = Math.min(100, Math.max(0, Math.round(cardDepth * 100)));
+                const bktPost = t.bkt ? (t.bkt.posterior ?? t.bkt.posterior_mastery ?? '--') : '--';
+                const action = t.policy ? t.policy.next_action : 'ACTIVE';
+                const skill = t.bkt ? t.bkt.skill : 'GENERAL';
+                const candText = t.candidate_input || t.candidate_answer || 'Spoken answer...';
+
+                card.innerHTML = `
+                    <div class="history-card-header">
+                        <strong style="color:var(--accent-cyan)">TURN #${t.turn_index || idx+1} • ${skill}</strong>
+                        ${obsBadgeHtml}
+                    </div>
+                    <div style="font-size:0.75rem; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        "${candText}"
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#64748b; font-family:'JetBrains Mono';">
+                        <span>Depth: <strong style="color:#e2e8f0">${depthPct}%</strong></span>
+                        <span>Post P(L): <strong style="color:var(--accent-blue)">${bktPost}</strong></span>
+                        <span>Action: <strong style="color:var(--accent-yellow)">${action}</strong></span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateLiveTelemetry(tel, activeModule) {
+            // Update Top Telemetry Badges
+            document.getElementById("stat-live-calls").textContent = tel.gemini_live_calls;
+            document.getElementById("stat-rest-calls").textContent = tel.gemini_rest_calls;
+            document.getElementById("stat-gemini-stt").textContent = "Live";
+            const kb = Math.round(tel.total_audio_bytes / 1024);
+            document.getElementById("stat-audio-bytes").textContent = kb > 1024 ? `${(kb/1024).toFixed(1)} MB` : `${kb} KB`;
+
+            // Active hub status
+            if (activeModule) {
+                const hubEl = document.getElementById("active-hub-status");
+                if (hubEl) hubEl.textContent = `ROUTING: ${activeModule.toUpperCase()}`;
+            }
+
+            // Phase and current skill
+            const skillLabel = document.getElementById("active-skill-label");
+            if (skillLabel) skillLabel.textContent = `Skill: ${tel.current_skill} (L${tel.scaffolding_level})`;
+
+            // Store turns history & latest turn audit
+            if (tel.turns_history && Array.isArray(tel.turns_history)) {
+                sessionTurnsHistory = tel.turns_history;
+                const turnCountBadge = document.getElementById("tab-turn-count");
+                if (turnCountBadge) turnCountBadge.textContent = sessionTurnsHistory.length;
+                const histCount = document.getElementById("history-total-count");
+                if (histCount) histCount.textContent = `${sessionTurnsHistory.length} TURNS`;
+                renderTurnChips();
+                renderHistoryCards();
+            }
+
+            if (tel.latest_turn_audit) {
+                latestTurnAudit = tel.latest_turn_audit;
+            }
+
+            // Render active or inspected turn
+            if (selectedTurnKey === 'latest') {
+                if (latestTurnAudit) {
+                    renderTurnAudit(latestTurnAudit, true);
+                }
+            } else if (typeof selectedTurnKey === 'number' && sessionTurnsHistory[selectedTurnKey]) {
+                renderTurnAudit(sessionTurnsHistory[selectedTurnKey], false);
+            }
+
+            // Highlight corresponding flow cards
+            if (activeModule) {
+                if (activeModule.includes("REST") || activeModule.includes("Evaluator")) {
+                    highlightCard("flow-card-shadow");
+                }
+                if (activeModule.includes("BKT")) {
+                    highlightCard("flow-card-bkt");
+                }
+                if (activeModule.includes("Policy")) {
+                    highlightCard("flow-card-policy");
+                }
+                if (activeModule.includes("Live")) {
+                    highlightCard("flow-card-live");
+                }
+            }
+
+            // Update Skills Matrix Progress Bars
+            if (tel.skills && tel.skills.length > 0) {
+                const matrix = document.getElementById("skills-matrix");
+                if (matrix) {
+                    matrix.innerHTML = "";
+                    tel.skills.forEach(s => {
+                        const pct = Math.round(s.mastery * 100);
+                        const row = document.createElement("div");
+                        row.className = "skill-row";
+                        row.innerHTML = `
+                            <div class="skill-meta">
+                                <span>${s.code}</span>
+                                <span style="color:var(--accent-cyan)">${pct}% Mastery</span>
+                            </div>
+                            <div class="skill-bar-bg"><div class="skill-bar-fill" style="width: ${pct}%;"></div></div>
+                        `;
+                        matrix.appendChild(row);
+                    });
+                }
+            }
+        }
+
+        // Spacebar shortcut: toggles mic when not typing
+        document.addEventListener("keydown", (e) => {
+            if (e.code === "Space" && document.activeElement !== document.getElementById("input-box")) {
+                e.preventDefault();
+                if (isAlexSpeaking) {
+                    interruptAlex();
+                } else {
+                    toggleMicrophone();
+                }
+            } else if (e.key === "Enter" && document.activeElement === document.getElementById("input-box")) {
+                e.preventDefault();
+                sendManualText();
+            }
+        });
+
+        // --- DUAL EVALUATION REPORTS SYSTEM ---
+        let currentStudentReport = "";
+        let currentEvaluatorReport = "";
+
+        function finishInterview() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const btnEnd = document.getElementById("btn-end");
+                if (btnEnd) {
+                    btnEnd.disabled = true;
+                    btnEnd.textContent = "⏳ Generating Reports...";
+                }
+                setStageStatus("Generating dual evaluation reports...", "speaking");
+                ws.send(JSON.stringify({ event: "finish_interview" }));
+            }
+        }
+
+        function showReportsModal(studentReport, evaluatorReport) {
+            currentStudentReport = studentReport || "# Candidate Career Compass\n\nNo student report data available.";
+            currentEvaluatorReport = evaluatorReport || "# Hiring Team Forensic Audit\n\nNo evaluator report data available.";
+
+            const modal = document.getElementById("reports-modal");
+            if (modal) {
+                modal.classList.add("active");
+                switchReportTab("student");
+            }
+            const btnEnd = document.getElementById("btn-end");
+            if (btnEnd) {
+                btnEnd.disabled = false;
+                btnEnd.textContent = "📑 View Reports";
+            }
+            setStageStatus("Reports ready for review.", "default");
+        }
+
+        function switchReportTab(tab) {
+            const btnStudent = document.getElementById("modal-tab-student");
+            const btnEval = document.getElementById("modal-tab-evaluator");
+            const contentEl = document.getElementById("modal-report-content");
+
+            if (tab === 'student') {
+                if (btnStudent) btnStudent.classList.add("active");
+                if (btnEval) btnEval.classList.remove("active");
+                renderReportText(contentEl, currentStudentReport);
+            } else {
+                if (btnStudent) btnStudent.classList.remove("active");
+                if (btnEval) btnEval.classList.add("active");
+                renderReportText(contentEl, currentEvaluatorReport);
+            }
+        }
+
+        function renderReportText(el, text) {
+            if (!el) return;
+            if (window.marked && typeof window.marked.parse === 'function') {
+                el.innerHTML = window.marked.parse(text);
+                el.className = "report-content markdown-rendered";
+            } else {
+                el.textContent = text;
+                el.className = "report-content";
+            }
+        }
+
+        function closeReportsModal() {
+            const modal = document.getElementById("reports-modal");
+            if (modal) modal.classList.remove("active");
+        }
+
+        function downloadCurrentReport() {
+            const isStudent = document.getElementById("modal-tab-student") && document.getElementById("modal-tab-student").classList.contains("active");
+            const text = isStudent ? currentStudentReport : currentEvaluatorReport;
+            const filename = isStudent ? "Candidate_Career_Compass_Report.md" : "Hiring_Team_Forensic_Report.md";
+            const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function copyCurrentReport() {
+            const isStudent = document.getElementById("modal-tab-student") && document.getElementById("modal-tab-student").classList.contains("active");
+            const text = isStudent ? currentStudentReport : currentEvaluatorReport;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Report markdown copied to clipboard!");
+            }).catch(() => {
+                alert("Failed to copy report to clipboard.");
+            });
+        }
+    </script>
+</body>
+</html>
