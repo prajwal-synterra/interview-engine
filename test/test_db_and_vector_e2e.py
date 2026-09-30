@@ -42,9 +42,19 @@ def verify_postgres_records():
                 print(f"  Card: {c['topic_code']} | Mastery: {c['final_mastery_p_l']} | Status: {c['status']}")
 
             # Check final reports
-            cur.execute("SELECT hiring_verdict, average_mastery, proctor_integrity_score FROM final_reports WHERE session_id = %s;", (sid,))
+            cur.execute("SELECT hiring_verdict, average_mastery, proctor_integrity_score, evaluator_audit_markdown FROM final_reports WHERE session_id = %s;", (sid,))
             rep = cur.fetchone()
-            print("Final Report Archived in DB:", rep)
+            if rep:
+                print("Final Report Archived in DB:", {
+                    "hiring_verdict": rep.get("hiring_verdict"),
+                    "average_mastery": rep.get("average_mastery"),
+                    "proctor_integrity_score": rep.get("proctor_integrity_score")
+                })
+                md = rep.get("evaluator_audit_markdown", "")
+                if "## 4. Multidimensional Item Response Theory (MIRT) Ability Radar" in md:
+                    mirt_section = md.split("## 4. Multidimensional Item Response Theory (MIRT) Ability Radar")[1].split("## 5.")[0]
+                    print("\n--- ARCHIVED REAL MIRT ABILITY RADAR IN POSTGRESQL ---")
+                    print(mirt_section.replace("θ", "theta").strip())
     conn.close()
 
 
@@ -65,8 +75,8 @@ async def run_live_e2e():
                     print("[E2E Test] Alex finished greeting!")
                     break
 
-        # 3. Candidate introduces themselves mentioning custom stack
-        custom_intro = "Hello, I am Prajwal. I designed an asynchronous real-time message stream with WebSockets and Redis in-memory caching to avoid database bottlenecks."
+        # 3. Candidate introduces themselves mentioning polyglot projects (Java + Python)
+        custom_intro = "Hello, I am Prajwal. In Java, I built an asynchronous real-time message stream with Netty and Redis caching. In Python, I built an ML inference pipeline using PyTorch and FastAPI."
         print(f"[E2E Test] Candidate speaking intro: '{custom_intro}'")
         await ws.send(json.dumps({"text": custom_intro}))
 

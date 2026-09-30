@@ -123,6 +123,73 @@ class KnowledgeGraph:
         if not candidate_skills:
             return None
 
-        # Sort by highest uncertainty (maximum information gain)
+        # Sort by highest uncertainty / maximum information leverage
         candidate_skills.sort(key=lambda x: x[1], reverse=True)
         return candidate_skills[0][0]
+
+
+# Curated Semantic Ontology Dependencies across Foundational Competency Pillars
+STANDARD_ONTOLOGY_DEPENDENCIES = [
+    # Foundational Prerequisite edges (directed: from_skill -> to_skill)
+    ("DATA_STRUCTURES_ALGORITHMS", "DISTRIBUTED_CACHING", EdgeType.PREREQUISITE, 0.75),
+    ("DATA_STRUCTURES_ALGORITHMS", "DATABASE_MODELING_TRANSACTIONS", EdgeType.PREREQUISITE, 0.70),
+    ("API_DESIGN_PROTOCOLS", "ASYNC_CONCURRENCY", EdgeType.PREREQUISITE, 0.65),
+    ("ASYNC_CONCURRENCY", "EVENT_STREAMING_MESSAGING", EdgeType.PREREQUISITE, 0.80),
+    ("DATABASE_MODELING_TRANSACTIONS", "DISTRIBUTED_CACHING", EdgeType.PREREQUISITE, 0.70),
+    ("DATABASE_MODELING_TRANSACTIONS", "NOSQL_DISTRIBUTED_STORAGE", EdgeType.PREREQUISITE, 0.75),
+
+    # Co-Requisite edges (bidirectional synergies)
+    ("ASYNC_CONCURRENCY", "DISTRIBUTED_CACHING", EdgeType.CO_REQUISITE, 0.65),
+    ("EVENT_STREAMING_MESSAGING", "DISTRIBUTED_CACHING", EdgeType.CO_REQUISITE, 0.60),
+    ("AI_INFERENCE_ORCHESTRATION", "ASYNC_CONCURRENCY", EdgeType.CO_REQUISITE, 0.70),
+    ("AI_INFERENCE_ORCHESTRATION", "API_DESIGN_PROTOCOLS", EdgeType.CO_REQUISITE, 0.60),
+    ("CONTAINER_INFRASTRUCTURE", "EVENT_STREAMING_MESSAGING", EdgeType.CO_REQUISITE, 0.55),
+    ("CONTAINER_INFRASTRUCTURE", "API_DESIGN_PROTOCOLS", EdgeType.CO_REQUISITE, 0.50),
+    ("CLOUD_SECURITY_AUTH", "API_DESIGN_PROTOCOLS", EdgeType.CO_REQUISITE, 0.65),
+]
+
+
+def build_dynamic_pillar_graph(
+    matched_pillars: List[Dict],
+    seniority: SeniorityTier = SeniorityTier.MID
+) -> KnowledgeGraph:
+    """
+    Constructs a dynamic, connected KnowledgeGraph populated with the candidate's
+    vector-matched competency pillars and their semantic dependency edges.
+    """
+    graph = KnowledgeGraph(seniority=seniority)
+    pillar_ids = []
+
+    # Calibrate initial priors by seniority tier
+    tier_prior = {
+        SeniorityTier.STUDENT: 0.35,
+        SeniorityTier.JUNIOR: 0.35,
+        SeniorityTier.MID: 0.40,
+        SeniorityTier.SENIOR_STAFF: 0.30
+    }.get(seniority, 0.40)
+
+    # 1. Register Nodes
+    for p in matched_pillars:
+        pid = p.get("pillar_id") or p.get("pillarId")
+        if not pid:
+            continue
+        pillar_ids.append(pid)
+        name = p.get("name", pid)
+        graph.add_skill(pid, custom_prior=tier_prior, description=name)
+
+    # 2. Wire Domain Ontology Edges
+    active_set = set(pillar_ids)
+    wired_count = 0
+    for from_s, to_s, edge_type, weight in STANDARD_ONTOLOGY_DEPENDENCIES:
+        if from_s in active_set and to_s in active_set:
+            graph.add_dependency(from_s, to_s, edge_type, weight=weight)
+            wired_count += 1
+
+    # 3. Connectivity Assurance: If any node has no edges, bridge with nearest peer
+    for pid in pillar_ids:
+        if not graph.adjacency.get(pid):
+            peers = [other for other in pillar_ids if other != pid]
+            if peers:
+                graph.add_dependency(pid, peers[0], EdgeType.CO_REQUISITE, weight=0.5)
+
+    return graph

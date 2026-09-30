@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 
 from app.bkt_engine import BKTNode, SeniorityTier, MasteryStatus
 from app.graph_engine import KnowledgeGraph, EdgeType
-from app.mirt_engine import MIRTEngine, ItemParameters
+from app.mirt_engine import MIRTEngine, ItemParameters, get_discrimination_for_pillar
 from app.proctor_engine import BehavioralProctorEngine
 from app.cpf_engine import MasterScorer, SkillEvaluationSummary
 
@@ -55,10 +55,17 @@ class PolicyRouter:
         self.devils_advocate_active: bool = False
         self.devils_advocate_results: List[float] = []
 
-    def initialize_session(self, skills: List[tuple[str, float]]) -> None:
-        """Initializes knowledge graph with required skills and weights."""
-        for skill_code, prior in skills:
-            self.graph.add_skill(skill_code, custom_prior=prior)
+    def initialize_session(
+        self,
+        skills: Optional[List[tuple[str, float]]] = None,
+        custom_graph: Optional[KnowledgeGraph] = None
+    ) -> None:
+        """Initializes knowledge graph with required skills or custom dynamic graph."""
+        if custom_graph is not None:
+            self.graph = custom_graph
+        elif skills:
+            for skill_code, prior in skills:
+                self.graph.add_skill(skill_code, custom_prior=prior)
         
         self.current_skill = self.graph.get_next_recommended_skill()
         self.state = SessionState.ACTIVE
@@ -69,7 +76,8 @@ class PolicyRouter:
         latency_ms: int,
         transcript: str,
         is_contradiction_probe: bool = False,
-        passed_contradiction_probe: Optional[bool] = None
+        passed_contradiction_probe: Optional[bool] = None,
+        estimated_difficulty: Optional[float] = None
     ) -> PolicyDirective:
         """
         Core State Machine processing loop.
@@ -88,7 +96,6 @@ class PolicyRouter:
         current_bii = proctor_res["current_bii"]
 
         # 2. Handle Devil's Advocate Resolution
-        # 2. Handle Devil's Advocate Resolution
         if self.state == SessionState.DEVILS_ADVOCATE:
             if observation == 1:
                 self.devils_advocate_results.append(1.0)
@@ -104,16 +111,17 @@ class PolicyRouter:
             # Transition out of Devil's Advocate to next skill
             return self._advance_to_next_skill(reason="Devils Advocate challenge concluded.")
 
-
         # 3. Standard BKT & Scaffolding Update
         bkt_res = node.update(observation=observation, scaffolding_level=self.current_scaffolding_level)
 
-        # 4. Update MIRT Ability
+        # 4. Update MIRT Ability via 5D Discrimination Mapping
+        alpha_weights = get_discrimination_for_pillar(self.current_skill)
+        diff_scalar = estimated_difficulty if estimated_difficulty is not None else (0.3 * (self.current_scaffolding_level + 1))
         mirt_item = ItemParameters(
             item_id=f"{self.current_skill}_step_{bkt_res['step']}",
             prompt=transcript,
-            difficulty=0.5 * (self.current_scaffolding_level + 1),
-            discrimination={self.current_skill: 1.0}
+            difficulty=diff_scalar,
+            discrimination=alpha_weights
         )
         self.mirt.update_ability(mirt_item, observation=observation)
 

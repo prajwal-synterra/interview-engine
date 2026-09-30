@@ -121,3 +121,108 @@ class MIRTEngine:
                 best_item = item
 
         return best_item
+
+
+# Canonical Macro Pillar -> MIRT Dimension Discrimination Mapping
+PILLAR_MIRT_DISCRIMINATION: Dict[str, Dict[str, float]] = {
+    "DISTRIBUTED_CACHING": {
+        "distributed_systems": 1.3,
+        "system_design": 1.0,
+        "databases": 0.8,
+        "concurrency": 0.6
+    },
+    "ASYNC_CONCURRENCY": {
+        "concurrency": 1.6,
+        "system_design": 0.9,
+        "algorithms": 0.5
+    },
+    "DATABASE_MODELING_TRANSACTIONS": {
+        "databases": 1.5,
+        "system_design": 1.0,
+        "concurrency": 0.5
+    },
+    "AI_INFERENCE_ORCHESTRATION": {
+        "system_design": 1.2,
+        "concurrency": 0.8,
+        "algorithms": 0.7
+    },
+    "CONTAINER_INFRASTRUCTURE": {
+        "system_design": 1.3,
+        "distributed_systems": 0.9
+    },
+    "EVENT_STREAMING_MESSAGING": {
+        "distributed_systems": 1.4,
+        "concurrency": 1.1,
+        "system_design": 0.8
+    },
+    "API_DESIGN_PROTOCOLS": {
+        "system_design": 1.2,
+        "concurrency": 0.6
+    },
+    "DATA_STRUCTURES_ALGORITHMS": {
+        "algorithms": 1.8,
+        "concurrency": 0.4
+    },
+    "NOSQL_DISTRIBUTED_STORAGE": {
+        "databases": 1.3,
+        "distributed_systems": 1.2,
+        "system_design": 0.8
+    },
+    "CLOUD_SECURITY_AUTH": {
+        "system_design": 1.0,
+        "distributed_systems": 0.6
+    }
+}
+
+
+def get_discrimination_for_pillar(pillar_id: str) -> Dict[str, float]:
+    """Retrieves 5D discrimination weights for a given pillar."""
+    pid = pillar_id.upper()
+    if pid in PILLAR_MIRT_DISCRIMINATION:
+        return PILLAR_MIRT_DISCRIMINATION[pid]
+    # Fallback balanced discrimination
+    return {"system_design": 1.0, "algorithms": 0.5}
+
+
+def theta_to_percentile(theta: float) -> float:
+    """Converts a standard normal latent ability score theta into an industry percentile."""
+    return round(0.5 * (1.0 + math.erf(theta / math.sqrt(2.0))) * 100.0, 1)
+
+
+DIMENSION_LABELS: Dict[str, str] = {
+    "algorithms": "Algorithms & Computational Complexity",
+    "system_design": "System Design & Scalability",
+    "concurrency": "Concurrency & Asynchronous Streaming",
+    "databases": "Database Internals & ACID Transactions",
+    "distributed_systems": "Distributed Consensus & Fault Tolerance"
+}
+
+
+def get_radar_summary(theta: Dict[str, float], std_error: Dict[str, float]) -> List[Dict]:
+    """Formats theta and standard error into human-readable percentiles and benchmark tiers."""
+    rows = []
+    for dim in DIMENSIONS:
+        th = theta.get(dim, 0.0)
+        se = std_error.get(dim, 1.0)
+        pct = theta_to_percentile(th)
+
+        if th >= 2.0:
+            tier = "Staff / Principal Frontier"
+        elif th >= 1.0:
+            tier = "Senior Engineer"
+        elif th >= 0.0:
+            tier = "Mid-Level Professional"
+        elif th >= -1.0:
+            tier = "Developing / Junior"
+        else:
+            tier = "Foundational Trainee"
+
+        rows.append({
+            "dimension": DIMENSION_LABELS.get(dim, dim.title()),
+            "dimension_code": dim,
+            "theta": round(th, 2),
+            "std_error": round(se, 2),
+            "percentile": pct,
+            "tier": tier
+        })
+    return rows

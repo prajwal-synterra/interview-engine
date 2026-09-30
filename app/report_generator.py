@@ -22,12 +22,17 @@ REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+from app.mirt_engine import get_radar_summary, theta_to_percentile
+
 async def generate_student_report(
     candidate_name: str,
     level: str,
     turns_history: List[Dict[str, Any]],
     skills_mastery: Dict[str, float],
-    proctor_bii: float
+    proctor_bii: float,
+    mirt_theta: Optional[Dict[str, float]] = None,
+    mirt_std_error: Optional[Dict[str, float]] = None,
+    ecosystem_summary: Optional[Dict[str, Any]] = None
 ) -> str:
     """Generates the Candidate-facing Career Compass & Growth Report."""
     turn_summaries = []
@@ -40,6 +45,21 @@ async def generate_student_report(
             "evaluator_summary": t.get("evaluator", {}).get("summary", "")
         })
 
+    theta_dict = mirt_theta or {}
+    radar_rows = get_radar_summary(theta_dict, mirt_std_error or {})
+    radar_text = "\n".join([
+        f"- **{r['dimension']}**: θ = {r['theta']:+.2f} ({r['percentile']}th percentile - {r['tier']})"
+        for r in radar_rows
+    ])
+
+    eco_text = ""
+    if ecosystem_summary:
+        eco_text = (
+            f"\nPOLYGLOT ECOSYSTEM AUDIT:\n"
+            f"- Primary Ecosystem: {ecosystem_summary.get('primary_ecosystem', 'GENERAL')}\n"
+            f"- Tech Stack Elements: {', '.join(ecosystem_summary.get('stack_keywords', []))}\n"
+        )
+
     prompt = f"""You are an elite Engineering Mentor and Career Architect.
 Generate a comprehensive, highly encouraging, and actionable 'Student Career Compass & Growth Report' for {candidate_name} ({level} level).
 
@@ -47,6 +67,9 @@ INTERVIEW SUMMARY DATA:
 - Skills Explored: {list(skills_mastery.keys())}
 - Final Mastery Probabilities: {skills_mastery}
 - Behavioral Integrity Index: {proctor_bii}
+{eco_text}
+- Real MIRT 5D Ability Breakdown:
+{radar_text}
 - Turn History Excerpts:
 {json.dumps(turn_summaries, indent=2)}
 
@@ -61,21 +84,24 @@ Format the report in clean GitHub Markdown with this exact structure:
 - **Primary Archetype:** (e.g., Systems Thinker / Intuitive Builder / Analytical Optimizer / Pragmatic Problem-Solver)
 - **Profile Overview:** (Explanation of their thinking style and communication strengths based on the interview transcript.)
 
-## 3. Top 3 Demonstrated Strengths (With Conversational Citations)
+## 3. Multidimensional Ability Profile (MIRT Dimensions)
+(Discuss their strengths across Algorithms, System Design, Concurrency, Databases, and Distributed Systems based on the provided MIRT scores.)
+
+## 4. Top 3 Demonstrated Strengths (With Conversational Citations)
 1. **Strength 1**: (Description + specific citation of what they explained well in the interview)
 2. **Strength 2**: (Description + citation)
 3. **Strength 3**: (Description + citation)
 
-## 4. High-Impact Growth & Focus Areas
+## 5. High-Impact Growth & Focus Areas
 1. **Focus Area 1**: (Clear technical gap identified during the questions, explained without judgment)
 2. **Focus Area 2**: (Another gap such as edge-case awareness, concurrency, or scale)
 
-## 5. Concrete Actionable Learning Roadmap (30-60-90 Days)
+## 6. Concrete Actionable Learning Roadmap (30-60-90 Days)
 - **Weeks 1-4 (Foundations & Core Mechanics):** Specific tools, books, and practice exercises.
 - **Weeks 5-8 (Architecture & Trade-offs):** Concrete projects to build.
 - **Weeks 9-12 (Production Engineering):** Advanced distributed systems or profiling concepts.
 
-## 6. Curated Resource Recommendations
+## 7. Curated Resource Recommendations
 - Books & Papers to read
 - Open source codebases to inspect
 """
@@ -107,7 +133,10 @@ async def generate_evaluator_report(
     turns_history: List[Dict[str, Any]],
     skills_mastery: Dict[str, float],
     proctor_bii: float,
-    fraud_risk_score: float
+    fraud_risk_score: float,
+    mirt_theta: Optional[Dict[str, float]] = None,
+    mirt_std_error: Optional[Dict[str, float]] = None,
+    ecosystem_summary: Optional[Dict[str, Any]] = None
 ) -> str:
     """Generates the Evaluator / Hiring Team Forensic Audit Report."""
     passed_turns = sum(1 for t in turns_history if t.get("evaluator", {}).get("observation") == 1)
@@ -144,6 +173,35 @@ async def generate_evaluator_report(
         for k, v in skills_mastery.items()
     ])
 
+    # Build Multidimensional MIRT Radar Table
+    theta_dict = mirt_theta or {}
+    se_dict = mirt_std_error or {}
+    radar_data = get_radar_summary(theta_dict, se_dict)
+    mirt_radar_rows = "\n".join([
+        f"| {r['dimension']} | `{r['theta']:+.2f}` | `±{r['std_error']:.2f}` | `{r['percentile']}%` | {r['tier']} |"
+        for r in radar_data
+    ])
+    mean_theta = round(sum(r["theta"] for r in radar_data) / max(1, len(radar_data)), 2)
+
+    # Build Ecosystem Audit Section
+    eco_section = ""
+    if ecosystem_summary:
+        eco_primary = ecosystem_summary.get("primary_ecosystem", "GENERAL")
+        eco_keywords = ", ".join(ecosystem_summary.get("stack_keywords", [])) or "None specified"
+        eco_poly = "YES (Multi-Project Switching Active)" if ecosystem_summary.get("is_polyglot") else "Single Stack"
+        eco_section = f"""
+## 3. Polyglot Project Ecosystem Audit
+- **Primary Runtime Architecture:** `{eco_primary}`
+- **Multi-Ecosystem Adaptation:** `{eco_poly}`
+- **Identified Stack Dialects:** `{eco_keywords}`
+"""
+    else:
+        eco_section = """
+## 3. Polyglot Project Ecosystem Audit
+- **Primary Runtime Architecture:** `GENERAL_SYSTEMS`
+- **Multi-Ecosystem Adaptation:** Single Stack Focus
+"""
+
     report_md = f"""# 📑 Technical Evaluation & Forensic Audit Report
 **Hiring Team Copy** | **Strictly Confidential**  
 **Document Ref:** AIS-EVAL-{time.strftime('%Y%m%d')}-{candidate_name.upper()}  
@@ -154,6 +212,7 @@ async def generate_evaluator_report(
 ## 1. Hiring Recommendation & Verdict
 - **Hiring Signal:** {recommendation_badge}
 - **Average Bayesian Mastery Score:** `{avg_mastery * 100:.1f}%`
+- **Mean Latent Ability (θ):** `{mean_theta:+.2f}`
 - **Rubric Pass Rate:** `{pass_rate}%` ({passed_turns} of {total_turns} turns passed)
 - **Behavioral Integrity Index (BII):** `{proctor_bii:.3f}` (Status: {'NOMINAL' if proctor_bii >= 0.4 else 'FLAGGED'})
 - **Fraud Risk Score:** `{fraud_risk_score:.2f} / 1.00`
@@ -167,16 +226,26 @@ async def generate_evaluator_report(
 {skills_table_rows}
 
 ---
+{eco_section}
+---
 
-## 3. Cognitive Potential Fingerprint (CPF)
+## 4. Multidimensional Item Response Theory (MIRT) Ability Radar
+
+| Dimension | Latent Ability (θ) | Standard Error (SE) | Industry Percentile | Benchmark Evaluation |
+|:---|:---:|:---:|:---:|:---|
+{mirt_radar_rows}
+
+---
+
+## 5. Cognitive Potential Fingerprint (CPF)
 - **Intellectual Vitality Index (IVI):** `{min(1.0, 0.4 + avg_mastery * 0.5):.2f}` (Measures first-principles reasoning and technical curiosity)
 - **Adaptability Gradient (RAG):** `{min(1.0, avg_mastery * 1.1):.2f}` (Measures response velocity to Socratic nudges and scaffolding)
-- **Domain Ability Vector (θ):** `{(avg_mastery * 1.5 - 0.2):.2f}` (MIRT standardized latent ability scale)
+- **Composite Ability Vector (θ):** `{mean_theta:+.2f}` (True MIRT 5-dimensional standardized latent ability scale)
 - **Authenticity Metric:** `{(1.0 - fraud_risk_score):.2f}` (Co-pilot latency and speech cadence verification)
 
 ---
 
-## 4. Turn-by-Turn Algorithmic Audit Trail
+## 6. Turn-by-Turn Algorithmic Audit Trail
 
 | Turn # | Skill Tested | Evaluator Verdict | Posterior P(L) | FSM Action | Latency |
 |:---:|:---|:---:|:---:|:---|:---:|
@@ -184,7 +253,7 @@ async def generate_evaluator_report(
 
 ---
 
-## 5. Architectural Stress-Test & Devil's Advocate Notes
+## 7. Architectural Stress-Test & Devil's Advocate Notes
 - **Response Under Pressure:** Evaluated across {total_turns} interactive turns.
 - **Trade-off Awareness:** Observed candidate's balance of architectural complexity vs operational reality.
 - **Coachability:** System provided progressive Socratic scaffolding without leaking solutions.

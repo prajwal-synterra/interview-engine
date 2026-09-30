@@ -22,11 +22,12 @@ async def evaluate_candidate_response(
     skill: str,
     interviewer_question: str,
     candidate_answer: str,
-    scaffolding_level: int = 0
+    scaffolding_level: int = 0,
+    ecosystem_context: str = ""
 ) -> Dict[str, Any]:
     """
     Evaluates candidate response using structured JSON output from Gemini REST API.
-    Does not block audio streaming - runs asynchronously.
+    Does not block audio streaming - runs asynchronously in background.
     """
     prompt = f"""You are the Shadow Technical Evaluator in a Socratic Engineering Interview.
 Evaluate the candidate's technical response against the rubric criteria.
@@ -36,16 +37,18 @@ Skill: {skill}
 Scaffolding Level: L{scaffolding_level} (0 = Free response, 1-3 = Guided hints)
 Interviewer Question: "{interviewer_question}"
 Candidate Answer: "{candidate_answer}"
+Runtime / Ecosystem Context: {ecosystem_context or "General Systems Architecture"}
 
 EVALUATION RUBRIC:
 1. Concept Depth: Did they understand the underlying principles and abstractions?
-2. Practical Implementation: Did they mention concrete tools, patterns, or real-world constraints?
+2. Practical Implementation: Did they mention concrete tools, patterns, or real-world constraints appropriate for the active ecosystem?
 3. Trade-off Awareness: Did they identify failure modes, complexity, or system tradeoffs?
 
 Return a strict JSON object with this exact schema:
 {{
   "observation": 1,
   "depth_score": 0.85,
+  "estimated_difficulty": 0.4,
   "summary": "1-2 sentence concise technical assessment",
   "rubric_items": [
     {{"criterion": "Core Concept Depth", "passed": true, "note": "Clear explanation"}},
@@ -55,6 +58,7 @@ Return a strict JSON object with this exact schema:
   "recommended_probe": "Suggested follow-up concept to explore"
 }}
 Set "observation" to 1 if response meets expectations for this level, or 0 if fundamentally flawed/incomplete.
+"estimated_difficulty" should range from -1.5 (very basic) to +2.5 (advanced staff frontier).
 """
 
     try:
@@ -67,6 +71,8 @@ Set "observation" to 1 if response meets expectations for this level, or 0 if fu
             )
         )
         data = json.loads(response.text.strip())
+        if "estimated_difficulty" not in data:
+            data["estimated_difficulty"] = 0.3 * (scaffolding_level + 1)
         return data
     except Exception as e:
         print(f"[Shadow Evaluator Error]: {e}")
@@ -75,6 +81,7 @@ Set "observation" to 1 if response meets expectations for this level, or 0 if fu
         return {
             "observation": is_pass,
             "depth_score": 0.70 if is_pass else 0.35,
+            "estimated_difficulty": 0.2 * scaffolding_level + 0.3,
             "summary": "Evaluation fallback triggered.",
             "rubric_items": [
                 {"criterion": "Core Concept Depth", "passed": bool(is_pass), "note": "Assessed via fallback"},

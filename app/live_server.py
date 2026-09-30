@@ -88,6 +88,11 @@ from app.db_service import (
     init_db, create_session, update_session_blueprint, save_compacted_topic_card,
     log_turn_telemetry, save_final_reports
 )
+from app.graph_engine import build_dynamic_pillar_graph, KnowledgeGraph, MasteryStatus
+from app.ecosystem_service import (
+    detect_ecosystems_from_intro, bind_pillars_to_ecosystems,
+    get_ecosystem_directive, get_evaluator_ecosystem_context
+)
 
 @app.on_event("startup")
 def startup_event():
@@ -159,6 +164,8 @@ async def websocket_interview(websocket: WebSocket):
     active_topic = "GENERAL"
     session_phase = "INTRO"  # "INTRO" -> "DEEP_DIVE" -> "WRAPPING_UP"
     turns_on_active_topic = 0
+    ecosystem_summary: dict = {}
+    pillar_ecosystem_map: dict = {}
 
     # Session Telemetry State
     telemetry = {
@@ -220,7 +227,7 @@ async def websocket_interview(websocket: WebSocket):
 
             async def run_shadow_pipeline(user_text: str, question: str):
                 """Runs Shadow Evaluator REST, BKT, Policy Router, and Proctor in the background."""
-                nonlocal alex_finish_timestamp
+                nonlocal alex_finish_timestamp, pillar_ecosystem_map, ecosystem_summary
                 candidate_submit_time = time.time()
                 latency_ms = int((candidate_submit_time - alex_finish_timestamp) * 1000) if alex_finish_timestamp else 2200
                 telemetry["latency_ms"] = latency_ms
@@ -230,41 +237,46 @@ async def websocket_interview(websocket: WebSocket):
                     policy_router.graph.add_skill(current_skill, description=f"Domain: {current_skill}")
                 prev_state = policy_router.state.value
 
-                # 1. Run Shadow Evaluator (Gemini 2.5 Flash REST API)
+                # 1. Run Shadow Evaluator (Gemini 2.5 Flash REST API) with Active Ecosystem Context
                 await broadcast_telemetry(active_module="Gemini REST Evaluator")
+                eco_context = get_evaluator_ecosystem_context(current_skill, pillar_ecosystem_map)
                 try:
                     eval_result = await evaluate_candidate_response(
                         skill=current_skill,
                         interviewer_question=question,
                         candidate_answer=user_text,
-                        scaffolding_level=policy_router.current_scaffolding_level
+                        scaffolding_level=policy_router.current_scaffolding_level,
+                        ecosystem_context=eco_context
                     )
                 except Exception as e:
                     log_event("SHADOW_EVAL_ERROR", str(e))
-                    eval_result = {"observation": 1, "depth_score": 0.6, "rubric_items": []}
+                    eval_result = {"observation": 1, "depth_score": 0.6, "estimated_difficulty": 0.4, "rubric_items": []}
 
                 telemetry["gemini_rest_calls"] += 1
                 telemetry["latest_rubric"] = eval_result
                 obs = eval_result.get("observation", 1)
+                est_diff = eval_result.get("estimated_difficulty")
 
                 node = policy_router.graph.nodes.get(current_skill)
                 prior_val = round(node.p_l, 4) if node else 0.35
 
-                # 2. Update Deterministic Policy Router, BKT & Proctor
+                # 2. Update Deterministic Policy Router, BKT & Real 5D MIRT Ability
                 await broadcast_telemetry(active_module="Policy Router & BKT")
                 directive = policy_router.process_candidate_turn(
                     observation=obs,
                     latency_ms=latency_ms,
-                    transcript=user_text
+                    transcript=user_text,
+                    estimated_difficulty=est_diff
                 )
+                telemetry["mirt_theta"] = dict(policy_router.mirt.theta)
 
                 last_rec = node.history[-1] if (node and node.history) else None
 
                 # Build Comprehensive Turn Audit Record for Deep Inspection
                 prior_mastery_val = round(last_rec.prior_mastery, 4) if last_rec else prior_val
-                post_mastery_val = round(last_rec.posterior_mastery, 4) if last_rec else round(node.p_l, 4)
-                slip_val = round(last_rec.slip_used, 4) if last_rec else node.config.p_s
-                transit_val = node.config.p_t
+                post_mastery_val = round(last_rec.posterior_mastery, 4) if last_rec else (round(node.p_l, 4) if node else prior_val)
+                slip_val = round(last_rec.slip_used, 4) if last_rec else (node.config.p_s if node else 0.1)
+                transit_val = node.config.p_t if node else 0.1
                 raw_depth = eval_result.get("depth_score", 0.5)
                 norm_depth = round(raw_depth / 100.0, 2) if raw_depth > 1.0 else round(float(raw_depth), 2)
 
@@ -293,15 +305,15 @@ async def websocket_interview(websocket: WebSocket):
                         "posterior": post_mastery_val,
                         "prior_mastery": prior_mastery_val,
                         "posterior_mastery": post_mastery_val,
-                        "effective_mastery": round(node.p_l, 4),
-                        "delta": round(node.p_l - prior_mastery_val, 4),
+                        "effective_mastery": round(node.p_l, 4) if node else post_mastery_val,
+                        "delta": round((node.p_l - prior_mastery_val), 4) if node else 0.0,
                         "slip_used": slip_val,
                         "transit": transit_val,
                         "p_t": transit_val,
-                        "p_g": node.config.p_g,
+                        "p_g": node.config.p_g if node else 0.25,
                         "p_s": slip_val,
-                        "decay_rate": node.config.decay_rate,
-                        "status": node.status.value,
+                        "decay_rate": node.config.decay_rate if node else 0.8,
+                        "status": node.status.value if node else "IN_PROGRESS",
                         "formula": f"P(L_t | obs={obs}) = [P(L_{prior_mastery_val}) * {'(1 - Ps)' if obs == 1 else 'Ps'}] / P(obs)"
                     },
                     "policy": {
@@ -501,7 +513,10 @@ async def websocket_interview(websocket: WebSocket):
                             level=level,
                             turns_history=turns_history,
                             skills_mastery=skills_mastery,
-                            proctor_bii=round(policy_router.proctor.bii, 3)
+                            proctor_bii=round(policy_router.proctor.bii, 3),
+                            mirt_theta=policy_router.mirt.theta,
+                            mirt_std_error=policy_router.mirt.std_error,
+                            ecosystem_summary=ecosystem_summary
                         )
                         eval_rep = await generate_evaluator_report(
                             candidate_name=candidate_name,
@@ -509,7 +524,10 @@ async def websocket_interview(websocket: WebSocket):
                             turns_history=turns_history,
                             skills_mastery=skills_mastery,
                             proctor_bii=round(policy_router.proctor.bii, 3),
-                            fraud_risk_score=round(1.0 - policy_router.proctor.bii, 2)
+                            fraud_risk_score=round(1.0 - policy_router.proctor.bii, 2),
+                            mirt_theta=policy_router.mirt.theta,
+                            mirt_std_error=policy_router.mirt.std_error,
+                            ecosystem_summary=ecosystem_summary
                         )
                         log_report("Student Career Compass", "reports/")
                         log_report("Evaluator Forensic Audit", "reports/")
@@ -582,29 +600,42 @@ async def websocket_interview(websocket: WebSocket):
                         # Vector DB Semantic Search against Dynoxide
                         matched_pillars = await match_candidate_topics(user_text, top_k=3)
                         candidate_topics = [p["pillar_id"] for p in matched_pillars]
-                        active_topic = candidate_topics[0]
-                        active_pillar_name = matched_pillars[0].get("name", active_topic)
+
+                        # Feature 3: Multi-Ecosystem Detection & Project Binding
+                        ecosystem_summary = detect_ecosystems_from_intro(user_text)
+                        pillar_ecosystem_map = bind_pillars_to_ecosystems(matched_pillars, user_text)
+
+                        # Feature 1: Dynamic Knowledge Graph Topology Construction
+                        dynamic_graph = build_dynamic_pillar_graph(matched_pillars, seniority=tier)
+                        policy_router.initialize_session(custom_graph=dynamic_graph)
+                        active_topic = policy_router.current_skill or candidate_topics[0]
+                        active_pillar_name = next((p.get("name") for p in matched_pillars if p.get("pillar_id") == active_topic), active_topic)
 
                         # Save Permanent Intro Blueprint into PostgreSQL
                         intro_blueprint = {
                             "intro_text": user_text,
                             "matched_pillars": matched_pillars,
-                            "candidate_topics": candidate_topics
+                            "candidate_topics": candidate_topics,
+                            "ecosystem_summary": ecosystem_summary,
+                            "pillar_ecosystem_map": pillar_ecosystem_map
                         }
                         try:
                             update_session_blueprint(session_id, intro_blueprint)
                         except Exception as e:
                             log_event("DB_BLUEPRINT_ERROR", str(e))
 
-                        policy_router.current_skill = active_topic
                         session_phase = "DEEP_DIVE"
                         turns_on_active_topic = 0
+                        eco_directive = get_ecosystem_directive(active_topic, pillar_ecosystem_map)
                         log_event("VECTOR_DB_MATCH", f"Dynoxide Matched: {[p['name'] for p in matched_pillars]}. Focus: {active_pillar_name}")
+                        log_event("DYNAMIC_GRAPH_INIT", f"KnowledgeGraph Nodes: {list(policy_router.graph.nodes.keys())} | Edges: {len(policy_router.graph.edges)}")
+                        log_event("ECOSYSTEM_BINDING", f"Active Topic: {active_topic} | Dialect: {pillar_ecosystem_map.get(active_topic, 'GENERAL')}")
 
                         prompt_payload = (
                             f"The candidate introduced themselves: '{user_text}'.\n"
-                            f"Acknowledge their background warmly. Pick ONE specific technical domain they mentioned ({active_pillar_name} / {active_topic}) "
-                            f"and ask an open-ended technical question exploring their architectural decisions and how it works under the hood."
+                            f"Acknowledge their background warmly. Pick the technical domain ({active_pillar_name} / {active_topic}) "
+                            f"and ask an open-ended technical question exploring their architectural decisions and how it works under the hood.\n"
+                            f"{eco_directive}"
                         )
 
                     elif session_phase == "DEEP_DIVE":
@@ -617,6 +648,14 @@ async def websocket_interview(websocket: WebSocket):
                             # Epistemic Compaction: Save Topic Card to PostgreSQL
                             status_label = "MASTERED" if current_mastery >= 0.80 else "INCOMPLETE"
                             verdict_summary = f"Explored {active_topic} across {turns_on_active_topic} turns. Final mastery {round(current_mastery*100)}%."
+                            if node:
+                                node.status = MasteryStatus.MASTERED if current_mastery >= 0.80 else MasteryStatus.DEFICIENT
+
+                            # Graph Message Passing: Propagate mastery to dependent neighbors!
+                            propagated_boosts = policy_router.graph.propagate_mastery(active_topic)
+                            if propagated_boosts:
+                                log_event("GRAPH_PROPAGATE", f"Mastery of {active_topic} boosted priors: {propagated_boosts}")
+
                             try:
                                 save_compacted_topic_card(
                                     session_id=session_id,
@@ -630,32 +669,36 @@ async def websocket_interview(websocket: WebSocket):
                             except Exception as e:
                                 log_event("DB_COMPACT_ERROR", str(e))
 
-                            remaining_topics = [t for t in candidate_topics if t != active_topic]
-                            if remaining_topics:
-                                active_topic = remaining_topics[0]
-                                candidate_topics = remaining_topics
+                            # Feature 1: Real Graph-Driven Topic Recommendation!
+                            next_skill = policy_router.graph.get_next_recommended_skill()
+                            if next_skill:
+                                active_topic = next_skill
                                 policy_router.current_skill = active_topic
                                 turns_on_active_topic = 0
-                                log_event("TOPIC_TRANSITION", f"Depth reached. Transitioning to next candidate topic: {active_topic}")
+                                eco_directive = get_ecosystem_directive(active_topic, pillar_ecosystem_map)
+                                log_event("GRAPH_ROUTE_TRANSITION", f"Depth reached. Graph routing next topic: {active_topic} | Dialect: {pillar_ecosystem_map.get(active_topic, 'GENERAL')}")
                                 prompt_payload = (
                                     f"The candidate answered: '{user_text}'.\n"
                                     f"They have demonstrated depth on the previous topic. Acknowledge this briefly, and naturally transition to explore "
-                                    f"the next topic they mentioned earlier in their intro: {active_topic}.\n"
+                                    f"the next topic: {active_topic}.\n"
+                                    f"{eco_directive}\n"
                                     f"Ask an open-ended question about how they work with {active_topic}."
                                 )
                             else:
                                 session_phase = "WRAPPING_UP"
-                                log_event("INTERVIEW_FLOW", "All candidate topics explored. Wrapping up technical dialogue.")
+                                log_event("INTERVIEW_FLOW", "All candidate graph topics explored. Wrapping up technical dialogue.")
                                 prompt_payload = (
                                     f"The candidate answered: '{user_text}'.\n"
                                     f"Thank them warmly for a fantastic and deep technical discussion across their projects. "
                                     f"Let them know you have enough technical depth and are compiling their evaluation reports."
                                 )
                         else:
-                            # Continue Socratic drill-down on active_topic
+                            # Continue Socratic drill-down on active_topic with active ecosystem directive
+                            eco_directive = get_ecosystem_directive(active_topic, pillar_ecosystem_map)
                             prompt_payload = (
                                 f"The candidate answered: '{user_text}'.\n"
                                 f"[PEDAGOGICAL DIRECTIVE: Continue probing deep into {active_topic}. Ask a follow-up exploring trade-offs, edge cases, failure modes, or concrete design decisions.]\n"
+                                f"{eco_directive}\n"
                                 f"Respond Socratically as Alex the interviewer."
                             )
 
