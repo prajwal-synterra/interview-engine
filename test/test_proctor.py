@@ -6,6 +6,10 @@ Tests:
 3. Contradiction probe: failing an injected false technical premise triggers critical flag.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.proctor_engine import BehavioralProctorEngine
 
 

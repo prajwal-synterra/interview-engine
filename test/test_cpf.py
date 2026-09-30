@@ -6,6 +6,10 @@ Tests:
 3. Copilot cheater: 100% technical mastery but BII = 0.60 -> FLAGGED_FOR_FRAUD override.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.cpf_engine import MasterScorer, SkillEvaluationSummary, HiringRecommendation
 
 

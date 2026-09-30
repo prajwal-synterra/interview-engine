@@ -7,6 +7,10 @@ Tests:
 4. Next-skill recommendation based on maximum information leverage.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.graph_engine import KnowledgeGraph, EdgeType
 from app.bkt_engine import SeniorityTier, MasteryStatus
 

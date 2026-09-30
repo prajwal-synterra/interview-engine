@@ -7,6 +7,10 @@ Tests:
 4. Final session report generation with deterministic recommendation.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app.policy_router import PolicyRouter, SessionState
 from app.bkt_engine import SeniorityTier
 

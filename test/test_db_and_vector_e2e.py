@@ -3,6 +3,10 @@ End-to-End Verification Test for Vector DB (Dynoxide) and PostgreSQL.
 Tests real semantic search, intro blueprint storage, turn telemetry, compaction, and report archiving.
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import asyncio
 import json
 import websockets
