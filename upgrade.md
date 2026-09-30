@@ -278,14 +278,14 @@ To guarantee that sessions never crash, context never overflows, and candidate p
 
 ## 7. Step-by-Step Implementation Roadmap
 
-| Milestone | Deliverables | Verification Metric |
-|---|---|---|
-| **Phase 1: DB & Compaction Engine** | 1. Implement SQLite/PostgreSQL schema (`sessions`, `topic_cards`, `telemetry`).<br>2. Implement Turn 1 Intro Blueprint persistent storage.<br>3. Implement Topic Compaction and context flushing after depth completion. | Gemini Live context stays $< 4$ turns throughout a 10-turn interview without 1008 errors. |
-| **Phase 2: Vector DB Pillar Matching** | 1. Create a Vector DB collection of 25 Foundational Engineering Pillars.<br>2. Replace static regex topic extractor with Vector DB semantic search.<br>3. Add Criticality Weight filter to prioritize core backend/systems concepts over incidental tools. | Candidate mentioning *"TimescaleDB and MQTT"* automatically matches `Realtime Concurrency` and `Time-Series Persistence`. |
-| **Phase 3: Real MIRT & Graph Pathfinding** | 1. Wire Shadow LLM difficulty ($b$) and discrimination ($\alpha$) outputs into `MIRTEngine`.<br>2. Hook `KnowledgeGraph.get_next_recommended_skill()` to drive Topic transitions.<br>3. Feed true MIRT $\vec{\theta}$ vector into Evaluator Report radar. | MIRT $\theta$ changes deterministically based on question difficulty; report shows genuine 3D radar. |
-| **Phase 4: Multi-Ecosystem Adaptation** | 1. Implement ecosystem detector from Intro Blueprint.<br>2. Inject dynamic ecosystem context into Shadow Evaluator prompts (Python, Java, Go, Node.js). | Java candidate mentioning Spring/Netty receives idiomatic JVM questions rather than Python questions. |
+| Milestone | Deliverables | Verification Metric | Status |
+|---|---|---|---|
+| **Phase 1: DB & Compaction Engine** | 1. Implement PostgreSQL schema (`interview_sessions`, `compacted_topic_cards`, `turn_telemetry_logs`, `final_reports`).<br>2. Implement Turn 1 Intro Blueprint persistent storage.<br>3. Implement Topic Compaction and context flushing after depth completion. | Gemini Live context stays $< 4$ turns throughout a 10-turn interview without 1008 errors; state preserved in PostgreSQL. | ✅ **COMPLETED** |
+| **Phase 2: Vector DB Pillar Matching** | 1. Launch Dynoxide container on port 8001 with native vector index.<br>2. Generate 768-dim embeddings via `gemini-embedding-2`.<br>3. Replace static regex topic extractor with DynamoDB-compatible `boto3` vector search.<br>4. Rank pillars by cosine distance and criticality. | Candidate mentioning custom projects automatically matches core engineering pillars in real time. | ✅ **COMPLETED** |
+| **Phase 3: Real MIRT & Graph Pathfinding** | 1. Wire Shadow LLM difficulty ($b$) and discrimination ($\alpha$) outputs into `MIRTEngine`.<br>2. Hook `KnowledgeGraph.get_next_recommended_skill()` to drive Topic transitions.<br>3. Feed true MIRT $\vec{\theta}$ vector into Evaluator Report radar. | MIRT $\theta$ changes deterministically based on question difficulty; report shows genuine 3D radar. | ⏳ *Next in Pipeline* |
+| **Phase 4: Multi-Ecosystem Adaptation** | 1. Implement ecosystem detector from Intro Blueprint.<br>2. Inject dynamic ecosystem context into Shadow Evaluator prompts (Python, Java, Go, Node.js). | Java candidate mentioning Spring/Netty receives idiomatic JVM questions rather than Python questions. | ⏳ *Queued* |
 
 ---
 
 *Authored for Interview Engine Architecture V3.*  
-*Status: Ready for Phased Implementation on branch `dev/v3`.*
+*Status: Phase 1 & 2 Live & Verified on branch `dev/v3`.*
