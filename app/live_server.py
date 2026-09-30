@@ -78,10 +78,25 @@ async def get_index():
     return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
 
 
+import uuid
 from app.logger import (
     log_event, log_speech, log_shadow_eval, log_bkt_math, log_policy, log_proctor, log_report
 )
 from app.report_generator import generate_student_report, generate_evaluator_report
+from app.vector_service import match_candidate_topics, seed_competency_pillars
+from app.db_service import (
+    init_db, create_session, update_session_blueprint, save_compacted_topic_card,
+    log_turn_telemetry, save_final_reports
+)
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        init_db()
+        seed_competency_pillars()
+    except Exception as e:
+        print(f"[Startup Warning]: {e}")
+
 
 def extract_topics_from_text(text: str) -> list[str]:
     """Extracts technical competency domains mentioned in candidate's introduction."""
@@ -113,7 +128,13 @@ async def websocket_interview(websocket: WebSocket):
     level = init_data.get("level", "MEDIUM").upper()
     candidate_name = init_data.get("name", "Candidate")
 
-    log_event("SESSION_START", f"Candidate '{candidate_name}' connected. Tier: {level}")
+    session_id = f"sess_{uuid.uuid4().hex[:12]}"
+    try:
+        create_session(session_id, candidate_name, level)
+    except Exception as e:
+        log_event("DB_SESSION_ERROR", str(e))
+
+    log_event("SESSION_START", f"Candidate '{candidate_name}' connected (Session: {session_id}). Tier: {level}")
 
     tier_map = {
         "STUDENT": SeniorityTier.STUDENT,
@@ -306,6 +327,24 @@ async def websocket_interview(websocket: WebSocket):
                 log_policy(prev_state, directive.current_state.value, directive.next_action, directive.prompt_directive or "Normal Progression")
                 log_proctor(policy_router.proctor.bii, 1.0 - policy_router.proctor.bii, "NOMINAL" if policy_router.proctor.bii >= 0.35 else "FLAGGED")
 
+                # Persist turn telemetry to PostgreSQL database
+                try:
+                    log_turn_telemetry(
+                        session_id=session_id,
+                        turn_index=turn_audit["turn_index"],
+                        topic=current_skill,
+                        interviewer_prompt=question,
+                        candidate_transcript=user_text,
+                        latency_ms=latency_ms,
+                        evaluator_observation=obs,
+                        depth_score=norm_depth,
+                        bkt_prior=prior_mastery_val,
+                        bkt_posterior=post_mastery_val,
+                        proctor_bii=round(policy_router.proctor.bii, 3)
+                    )
+                except Exception as e:
+                    log_event("DB_LOG_ERROR", f"PostgreSQL turn telemetry error: {e}")
+
                 # Update Telemetry snapshot
                 if current_skill in policy_router.graph.nodes:
                     node = policy_router.graph.nodes[current_skill]
@@ -475,6 +514,22 @@ async def websocket_interview(websocket: WebSocket):
                         log_report("Student Career Compass", "reports/")
                         log_report("Evaluator Forensic Audit", "reports/")
 
+                        # Persist final assessment reports to PostgreSQL database
+                        try:
+                            avg_mastery = sum(skills_mastery.values()) / max(1, len(skills_mastery))
+                            hiring_signal = "STRONG HIRE" if avg_mastery >= 0.80 else ("HIRE" if avg_mastery >= 0.60 else ("LEAN HIRE" if avg_mastery >= 0.45 else "NO HIRE"))
+                            save_final_reports(
+                                session_id=session_id,
+                                student_report=student_rep,
+                                evaluator_report=eval_rep,
+                                hiring_verdict=hiring_signal,
+                                average_mastery=round(avg_mastery, 3),
+                                proctor_integrity_score=round(policy_router.proctor.bii, 3)
+                            )
+                            log_event("DB_ARCHIVE", f"Archived final reports in PostgreSQL for session {session_id}.")
+                        except Exception as e:
+                            log_event("DB_ARCHIVE_ERROR", f"PostgreSQL report archive error: {e}")
+
                         await websocket.send_json({
                             "event": "reports_generated",
                             "student_report": student_rep,
@@ -524,17 +579,32 @@ async def websocket_interview(websocket: WebSocket):
 
                     # 2. Topic Management & Socratic Dialogue Progression
                     if session_phase == "INTRO":
-                        candidate_topics = extract_topics_from_text(user_text)
+                        # Vector DB Semantic Search against Dynoxide
+                        matched_pillars = await match_candidate_topics(user_text, top_k=3)
+                        candidate_topics = [p["pillar_id"] for p in matched_pillars]
                         active_topic = candidate_topics[0]
+                        active_pillar_name = matched_pillars[0].get("name", active_topic)
+
+                        # Save Permanent Intro Blueprint into PostgreSQL
+                        intro_blueprint = {
+                            "intro_text": user_text,
+                            "matched_pillars": matched_pillars,
+                            "candidate_topics": candidate_topics
+                        }
+                        try:
+                            update_session_blueprint(session_id, intro_blueprint)
+                        except Exception as e:
+                            log_event("DB_BLUEPRINT_ERROR", str(e))
+
                         policy_router.current_skill = active_topic
                         session_phase = "DEEP_DIVE"
                         turns_on_active_topic = 0
-                        log_event("TOPIC_EXTRACT", f"Identified topics: {candidate_topics}. Selected deep-dive focus: {active_topic}")
+                        log_event("VECTOR_DB_MATCH", f"Dynoxide Matched: {[p['name'] for p in matched_pillars]}. Focus: {active_pillar_name}")
 
                         prompt_payload = (
                             f"The candidate introduced themselves: '{user_text}'.\n"
-                            f"Acknowledge their background warmly. Pick ONE specific technical topic they mentioned ({active_topic}) "
-                            f"and ask an open-ended technical question to explore how it works under the hood."
+                            f"Acknowledge their background warmly. Pick ONE specific technical domain they mentioned ({active_pillar_name} / {active_topic}) "
+                            f"and ask an open-ended technical question exploring their architectural decisions and how it works under the hood."
                         )
 
                     elif session_phase == "DEEP_DIVE":
@@ -544,6 +614,22 @@ async def websocket_interview(websocket: WebSocket):
 
                         # Check if depth is reached on current topic
                         if current_mastery >= 0.80 or turns_on_active_topic >= 3:
+                            # Epistemic Compaction: Save Topic Card to PostgreSQL
+                            status_label = "MASTERED" if current_mastery >= 0.80 else "INCOMPLETE"
+                            verdict_summary = f"Explored {active_topic} across {turns_on_active_topic} turns. Final mastery {round(current_mastery*100)}%."
+                            try:
+                                save_compacted_topic_card(
+                                    session_id=session_id,
+                                    topic_code=active_topic,
+                                    turns_spent=turns_on_active_topic,
+                                    final_mastery_p_l=round(current_mastery, 3),
+                                    status=status_label,
+                                    verdict_summary=verdict_summary
+                                )
+                                log_event("EPISTEMIC_COMPACT", f"Saved Compacted Topic Card for {active_topic} to PostgreSQL ({status_label}).")
+                            except Exception as e:
+                                log_event("DB_COMPACT_ERROR", str(e))
+
                             remaining_topics = [t for t in candidate_topics if t != active_topic]
                             if remaining_topics:
                                 active_topic = remaining_topics[0]
