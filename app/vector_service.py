@@ -241,3 +241,45 @@ async def match_candidate_topics(intro_text: str, top_k: int = 3) -> List[Dict[s
             {"pillar_id": "ASYNC_CONCURRENCY", "name": "Real-Time Streaming & Concurrency", "domain": "CONCURRENCY_STREAMING", "criticality": "HIGH", "similarity": 0.80},
             {"pillar_id": "AI_INFERENCE_ORCHESTRATION", "name": "AI Systems & Inference Pipelines", "domain": "AI_SYSTEMS", "criticality": "HIGH", "similarity": 0.75}
         ]
+
+
+def get_all_pillars() -> List[Dict[str, Any]]:
+    """Returns all seeded competency pillars with their metadata."""
+    return [
+        {
+            "pillar_id": p["pillarId"],
+            "name": p["name"],
+            "domain": p["domain"],
+            "criticality": p["criticality"],
+            "probe": p["probe"],
+            "descriptors": p["descriptors"]
+        }
+        for p in SEED_PILLARS
+    ]
+
+
+def get_vector_status() -> Dict[str, Any]:
+    """Returns vector database status and metadata."""
+    try:
+        tables = db_client.list_tables().get("TableNames", [])
+        is_ready = TABLE_NAME in tables
+        return {
+            "status": "ONLINE" if is_ready else "TABLE_MISSING",
+            "provider": "Dynoxide (Local DynamoDB Vector)",
+            "url": DYNOXIDE_URL,
+            "table": TABLE_NAME,
+            "index": INDEX_NAME,
+            "dimensions": EMBEDDING_DIM,
+            "total_pillars": len(SEED_PILLARS)
+        }
+    except Exception as e:
+        return {
+            "status": f"OFFLINE ({e})",
+            "provider": "Dynoxide (Local DynamoDB Vector)",
+            "url": DYNOXIDE_URL,
+            "table": TABLE_NAME,
+            "index": INDEX_NAME,
+            "dimensions": EMBEDDING_DIM,
+            "total_pillars": len(SEED_PILLARS)
+        }
+

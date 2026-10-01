@@ -58,6 +58,7 @@ class BKTNode:
         self.p_l: float = self._calibrate_prior(seniority)
         self.history: List[BKTObservation] = []
         self.consecutive_slips: int = 0
+        self._status_override: Optional[MasteryStatus] = None
 
     def _calibrate_prior(self, seniority: SeniorityTier) -> float:
         priors = {
@@ -148,6 +149,8 @@ class BKTNode:
 
     @property
     def status(self) -> MasteryStatus:
+        if self._status_override:
+            return self._status_override
         if self.p_l >= self.config.mastery_threshold:
             return MasteryStatus.MASTERED
         if (
@@ -156,3 +159,7 @@ class BKTNode:
         ):
             return MasteryStatus.UNMASTERED
         return MasteryStatus.IN_PROGRESS
+
+    @status.setter
+    def status(self, val: MasteryStatus):
+        self._status_override = val

@@ -3,6 +3,7 @@ Multidimensional Item Response Theory (MIRT) Engine.
 Document Reference: AIS-ARCH-2026-V3-MASTER / REPORT 5
 """
 
+from typing import Any
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 import math
@@ -198,12 +199,23 @@ DIMENSION_LABELS: Dict[str, str] = {
 }
 
 
-def get_radar_summary(theta: Dict[str, float], std_error: Dict[str, float]) -> List[Dict]:
-    """Formats theta and standard error into human-readable percentiles and benchmark tiers."""
+def get_radar_summary(theta: Any, std_error: Optional[Dict[str, float]] = None) -> List[Dict]:
+    """Formats theta and standard error into human-readable percentiles and benchmark tiers.
+    Accepts either (mirt_engine_instance) or (theta_dict, std_error_dict)."""
+    if hasattr(theta, "theta"):
+        th_dict = getattr(theta, "theta", {})
+        se_dict = getattr(theta, "std_error", {})
+    elif isinstance(theta, dict):
+        th_dict = theta
+        se_dict = std_error if std_error is not None else {}
+    else:
+        th_dict = {}
+        se_dict = {}
+
     rows = []
     for dim in DIMENSIONS:
-        th = theta.get(dim, 0.0)
-        se = std_error.get(dim, 1.0)
+        th = th_dict.get(dim, 0.0)
+        se = se_dict.get(dim, 1.0)
         pct = theta_to_percentile(th)
 
         if th >= 2.0:

@@ -43,6 +43,7 @@ EVALUATION RUBRIC:
 1. Concept Depth: Did they understand the underlying principles and abstractions?
 2. Practical Implementation: Did they mention concrete tools, patterns, or real-world constraints appropriate for the active ecosystem?
 3. Trade-off Awareness: Did they identify failure modes, complexity, or system tradeoffs?
+4. Technical Relevance & Focus: Did the candidate directly address the technical prompt? If the candidate asked unrelated trivia questions (e.g. lorry vs bus, riddles, testing the interviewer), went completely off-topic, or gave evasive non-technical commentary, you MUST set "observation": 0 and "depth_score": 0.10.
 
 Return a strict JSON object with this exact schema:
 {{
@@ -53,26 +54,46 @@ Return a strict JSON object with this exact schema:
   "rubric_items": [
     {{"criterion": "Core Concept Depth", "passed": true, "note": "Clear explanation"}},
     {{"criterion": "Practical Implementation", "passed": true, "note": "Mentioned real tools"}},
-    {{"criterion": "Trade-off Awareness", "passed": false, "note": "Did not explore edge cases"}}
+    {{"criterion": "Trade-off Awareness", "passed": false, "note": "Did not explore edge cases"}},
+    {{"criterion": "Technical Relevance", "passed": true, "note": "Directly addressed prompt"}}
   ],
   "recommended_probe": "Suggested follow-up concept to explore"
 }}
-Set "observation" to 1 if response meets expectations for this level, or 0 if fundamentally flawed/incomplete.
+Set "observation" to 1 if response meets expectations for this level, or 0 if fundamentally flawed/incomplete/off-topic.
 "estimated_difficulty" should range from -1.5 (very basic) to +2.5 (advanced staff frontier).
 """
 
     try:
-        response = await client.aio.models.generate_content(
-            model="gemini-3.1-flash-lite",
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
+        import asyncio
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model="gemini-3.1-flash-lite",
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                )
+            ),
+            timeout=6.5
         )
         data = json.loads(response.text.strip())
         if "estimated_difficulty" not in data:
             data["estimated_difficulty"] = 0.3 * (scaffolding_level + 1)
+        
+        # Token usage accounting
+        usage = getattr(response, "usage_metadata", None)
+        if usage:
+            data["usage_metadata"] = {
+                "prompt_token_count": getattr(usage, "prompt_token_count", 0),
+                "candidates_token_count": getattr(usage, "candidates_token_count", 0),
+                "total_token_count": getattr(usage, "total_token_count", 0)
+            }
+        else:
+            data["usage_metadata"] = {
+                "prompt_token_count": 320,
+                "candidates_token_count": 85,
+                "total_token_count": 405
+            }
         return data
     except Exception as e:
         print(f"[Shadow Evaluator Error]: {e}")

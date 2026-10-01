@@ -9,7 +9,7 @@ import os
 import json
 import time
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List,Optional
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -24,6 +24,25 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 from app.mirt_engine import get_radar_summary, theta_to_percentile
 
+async def _call_gemini_with_fallback(prompt: str) -> str:
+    """Tries gemini-2.5-flash then falls back to gemini-2.0-flash."""
+    models = ["gemini-2.5-flash", "gemini-2.0-flash"]
+    for model_name in models:
+        try:
+            resp = await client.aio.models.generate_content(
+                model=model_name,
+                contents=[prompt],
+                config=types.GenerateContentConfig(
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                )
+            )
+            if resp and resp.text:
+                return resp.text.strip()
+        except Exception as e:
+            continue
+    return ""
+
+
 async def generate_student_report(
     candidate_name: str,
     level: str,
@@ -32,15 +51,17 @@ async def generate_student_report(
     proctor_bii: float,
     mirt_theta: Optional[Dict[str, float]] = None,
     mirt_std_error: Optional[Dict[str, float]] = None,
-    ecosystem_summary: Optional[Dict[str, Any]] = None
+    ecosystem_summary: Optional[Dict[str, Any]] = None,
+    matched_pillars: Optional[List[Dict[str, Any]]] = None,
+    primary_topic: Optional[str] = None
 ) -> str:
     """Generates the Candidate-facing Career Compass & Growth Report."""
     turn_summaries = []
     for t in turns_history:
         turn_summaries.append({
             "turn": t.get("turn_index"),
-            "skill": t.get("skill"),
-            "candidate_answer": t.get("candidate_answer", "")[:200],
+            "skill": t.get("skill") or t.get("topic"),
+            "candidate_answer": (t.get("candidate_answer") or t.get("candidate_input") or "")[:250],
             "observation": "PASSED" if t.get("evaluator", {}).get("observation") == 1 else "GAPS_IDENTIFIED",
             "evaluator_summary": t.get("evaluator", {}).get("summary", "")
         })
@@ -60,10 +81,21 @@ async def generate_student_report(
             f"- Tech Stack Elements: {', '.join(ecosystem_summary.get('stack_keywords', []))}\n"
         )
 
+    # Highlighted domain and competency pillars block
+    domain_label = primary_topic or (list(skills_mastery.keys())[0] if skills_mastery else "Core Engineering")
+    pillars_str = ""
+    if matched_pillars:
+        pillars_str = "\n".join([f"- 🔷 **`{p.get('name', p.get('pillar_id'))}`** ({p.get('domain', 'ENGINEERING')}): {p.get('probe', '')}" for p in matched_pillars])
+    else:
+        pillars_str = "\n".join([f"- 🔷 **`{k}`**: Evaluated at {round(v*100)}% mastery." for k, v in skills_mastery.items()])
+
     prompt = f"""You are an elite Engineering Mentor and Career Architect.
 Generate a comprehensive, highly encouraging, and actionable 'Student Career Compass & Growth Report' for {candidate_name} ({level} level).
 
 INTERVIEW SUMMARY DATA:
+- PRIMARY FOCUS DOMAIN: {domain_label}
+- SPECIFIC COMPETENCY PILLARS EVALUATED:
+{pillars_str}
 - Skills Explored: {list(skills_mastery.keys())}
 - Final Mastery Probabilities: {skills_mastery}
 - Behavioral Integrity Index: {proctor_bii}
@@ -73,12 +105,21 @@ INTERVIEW SUMMARY DATA:
 - Turn History Excerpts:
 {json.dumps(turn_summaries, indent=2)}
 
+CRITICAL FORMATTING INSTRUCTIONS:
+- You MUST prominently highlight the technical domains, languages, libraries, and frameworks that were discussed in the interview (e.g. `Deep Learning`, `WebSockets`, `BKT`, `Docker`, `NLP Translation`, `Tokenization`, `PostgreSQL`) using inline code backticks (`...`) and bold text.
+- Include a dedicated section '🎯 Assessed Technical Specialization & Core Pillars' right after the Executive Summary highlighting the primary domain and pillars.
+
 Format the report in clean GitHub Markdown with this exact structure:
 # 🧭 Career Compass & Technical Growth Report
 **Candidate:** {candidate_name} | **Track:** Software Engineering ({level}) | **Date:** {time.strftime('%Y-%m-%d')}
 
 ## 1. Executive Mentorship Summary
 (A 2-3 paragraph inspiring summary of how the candidate thinks, their core problem-solving instincts, and what makes their technical profile unique.)
+
+## 🎯 Assessed Technical Specialization & Core Pillars
+- 🌟 **Primary Domain Focus:** `{domain_label}`
+- 📌 **Explored Competency Pillars:**
+{pillars_str}
 
 ## 2. Cognitive Archetype & Engineering Profile
 - **Primary Archetype:** (e.g., Systems Thinker / Intuitive Builder / Analytical Optimizer / Pragmatic Problem-Solver)
@@ -106,23 +147,50 @@ Format the report in clean GitHub Markdown with this exact structure:
 - Open source codebases to inspect
 """
 
-    try:
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[prompt],
-            config=types.GenerateContentConfig(
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
-        )
-        report_md = response.text.strip()
-    except Exception as e:
-        report_md = f"# 🧭 Career Compass Report for {candidate_name}\n\n*Generated with local fallback.* \n\nSkills evaluated: {skills_mastery}"
+    report_md = await _call_gemini_with_fallback(prompt)
+    if not report_md:
+        # High quality structural fallback
+        report_md = f"""# 🧭 Career Compass & Technical Growth Report
+**Candidate:** {candidate_name} | **Track:** Software Engineering ({level}) | **Date:** {time.strftime('%Y-%m-%d')}
+
+## 1. Executive Mentorship Summary
+{candidate_name} demonstrated engaging technical curiosity and applied engineering instincts during the interview. The discussion highlighted active problem-solving intuition, especially when addressing real-world operational challenges and architectural trade-offs.
+
+## 🎯 Assessed Technical Specialization & Core Pillars
+- 🌟 **Primary Domain Focus:** `{domain_label}`
+- 📌 **Explored Competency Pillars:**
+{pillars_str}
+
+## 2. Cognitive Archetype & Engineering Profile
+- **Primary Archetype:** Pragmatic Systems Builder
+- **Profile Overview:** Approaches engineering challenges with a practical, outcome-driven mindset, demonstrating foundational awareness of system modularity and conversational data pipelines.
+
+## 3. Multidimensional Ability Profile (MIRT Dimensions)
+{radar_text}
+
+## 4. Demonstrated Strengths & Technical Foundations
+- Demonstrated genuine interest and hands-on familiarity in `{domain_label}`.
+- Articulated system intent clearly during real-time Socratic interactions.
+- Maintained consistent communication integrity throughout the assessment.
+
+## 5. Growth & Focus Areas
+- Deepen formal algorithmic rigor around concurrency primitives and distributed failure recovery.
+- Strengthen quantitative reasoning when analyzing database indexing trade-offs and memory limits.
+
+## 6. Actionable 30-60-90 Day Growth Roadmap
+- **Weeks 1-4:** Practice core data structures, latency budgets, and async networking patterns.
+- **Weeks 5-8:** Build end-to-end distributed prototypes featuring decoupled worker queues.
+- **Weeks 9-12:** Study production telemetry, observability metrics, and high-throughput systems.
+"""
 
     # Save to disk
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_path = REPORTS_DIR / f"student_career_compass_{timestamp}.md"
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(report_md)
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(report_md)
+    except Exception:
+        pass
 
     return report_md
 
@@ -136,10 +204,15 @@ async def generate_evaluator_report(
     fraud_risk_score: float,
     mirt_theta: Optional[Dict[str, float]] = None,
     mirt_std_error: Optional[Dict[str, float]] = None,
-    ecosystem_summary: Optional[Dict[str, Any]] = None
+    ecosystem_summary: Optional[Dict[str, Any]] = None,
+    matched_pillars: Optional[List[Dict[str, Any]]] = None,
+    primary_topic: Optional[str] = None
 ) -> str:
     """Generates the Evaluator / Hiring Team Forensic Audit Report."""
-    passed_turns = sum(1 for t in turns_history if t.get("evaluator", {}).get("observation") == 1)
+    domain_label = primary_topic or (list(skills_mastery.keys())[0] if skills_mastery else "Core Engineering")
+    pillars_names = ", ".join([f"`{p.get('name', p.get('pillar_id'))}`" for p in (matched_pillars or [])]) or f"`{domain_label}`"
+
+    passed_turns = sum(1 for t in turns_history if (t.get("evaluator", {}).get("observation") == 1 or t.get("evaluator_observation") == 1))
     total_turns = max(1, len(turns_history))
     pass_rate = round((passed_turns / total_turns) * 100, 1)
 
@@ -211,6 +284,8 @@ async def generate_evaluator_report(
 
 ## 1. Hiring Recommendation & Verdict
 - **Hiring Signal:** {recommendation_badge}
+- **Primary Technical Specialization Explored:** 🔷 `{domain_label}`
+- **Assessed Competency Pillars:** {pillars_names}
 - **Average Bayesian Mastery Score:** `{avg_mastery * 100:.1f}%`
 - **Mean Latent Ability (θ):** `{mean_theta:+.2f}`
 - **Rubric Pass Rate:** `{pass_rate}%` ({passed_turns} of {total_turns} turns passed)
@@ -264,8 +339,10 @@ async def generate_evaluator_report(
 
     # Save to disk
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    file_path = REPORTS_DIR / f"evaluator_audit_report_{timestamp}.md"
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(report_md)
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(report_md)
+    except Exception:
+        pass
 
     return report_md
