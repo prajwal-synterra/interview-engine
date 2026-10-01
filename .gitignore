@@ -1,8 +1,17 @@
-# Ignore everything
+# Ignore everything by default
 *
 
-# Except the implementation report
+# Whitelist allowed directories and files
 !implementation_report/
 !implementation_report/**
 !.gitignore
 !ROADMAP.md
+!app/
+!app/**
+!test/
+!test/**
+
+# Ignore Python caches inside tracked dirs
+**/__pycache__/
+**/*.pyc
+.env
