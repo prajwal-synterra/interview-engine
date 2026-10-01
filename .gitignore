@@ -1,0 +1,7 @@
+# Ignore everything
+*
+
+# Except the implementation report
+!implementation_report/
+!implementation_report/**
+!.gitignore
