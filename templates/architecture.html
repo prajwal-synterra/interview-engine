@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Architecture Flow | Socratic AI</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .flow-step-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-top: 12px;
+        }
+        @media (max-width: 1100px) {
+            .flow-step-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 650px) {
+            .flow-step-grid { grid-template-columns: 1fr; }
+        }
+        .flow-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .flow-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.2);
+        }
+        .flow-number-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), #06b6d4);
+            color: white;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.82rem;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+        .flow-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .flow-title {
+            font-family: 'Outfit';
+            font-weight: 700;
+            font-size: 1.05rem;
+            color: var(--text-primary);
+        }
+        .flow-desc {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .flow-tech {
+            margin-top: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .connector-banner {
+            background: linear-gradient(90deg, rgba(99, 102, 241, 0.1), rgba(6, 182, 212, 0.1));
+            border: 1px dashed var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            color: var(--accent-cyan);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div>
+                <div class="brand-section">
+                    <div class="brand-logo-icon">🏛️</div>
+                    <div class="brand-text-wrap">
+                        <span class="brand-title">Socratic AI</span>
+                        <span class="brand-subtitle">Architecture Flow</span>
+                    </div>
+                </div>
+
+                <nav class="nav-menu">
+                    <div class="nav-category">Assessment</div>
+                    <a href="/" class="nav-item">
+                        <span class="nav-icon">🎙️</span>
+                        <span class="nav-text">Live Interview</span>
+                    </a>
+                    <a href="/telemetry" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">Telemetry & POC</span>
+                    </a>
+                    <a href="/reports" class="nav-item">
+                        <span class="nav-icon">📑</span>
+                        <span class="nav-text">Candidate Reports</span>
+                    </a>
+
+                    <div class="nav-category">System Deep-Dive</div>
+                    <a href="/logs" class="nav-item">
+                        <span class="nav-icon">📜</span>
+                        <span class="nav-text">Event Logs</span>
+                    </a>
+                    <a href="/architecture" class="nav-item active">
+                        <span class="nav-icon">🏛️</span>
+                        <span class="nav-text">Architecture Flow</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="user-card">
+                <div class="user-avatar">P</div>
+                <div class="user-info">
+                    <span class="user-name">Prajwal</span>
+                    <span class="user-role">Lead Evaluator</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WRAPPER -->
+        <div class="main-wrapper">
+            <!-- TOPBAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 class="page-title">Socratic Multi-Agent Architecture & POC Blueprint</h1>
+                </div>
+
+                <div class="topbar-right">
+                    <a href="/telemetry" class="btn btn-secondary">
+                        <span>📊 Open Live Telemetry</span>
+                    </a>
+                    <a href="/" class="btn btn-primary">
+                        <span>🎙️ Launch Voice Session</span>
+                    </a>
+                </div>
+            </header>
+
+            <!-- PAGE BODY -->
+            <main class="page-body">
+                <!-- ARCHITECTURE BANNER -->
+                <div class="connector-banner">
+                    <span>AUDIO WEBSOCKET (16kHz PCM)</span>
+                    <span>→</span>
+                    <span>DYNOXIDE VECTOR DB</span>
+                    <span>→</span>
+                    <span>DYNAMIC GRAPH FSM</span>
+                    <span>→</span>
+                    <span>SHADOW EVALUATOR REST</span>
+                    <span>→</span>
+                    <span>BKT & MIRT BRAIN</span>
+                    <span>→</span>
+                    <span>POSTGRESQL ARCHIVE</span>
+                </div>
+
+                <!-- 8-PHASE ARCHITECTURE GRID -->
+                <div class="flow-step-grid">
+                    <!-- Step 1 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">1</span>
+                            <span class="flow-title">Audio Pipeline & VAD</span>
+                        </div>
+                        <p class="flow-desc">
+                            Browser captures 16kHz raw PCM audio. Streams bidirectionally to Gemini Live 3.1 preview model. Native speech-to-text (STT) and voice activity detection (VAD) allow natural conversational pacing with 0 candidate latency.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-primary">Web Audio API</span>
+                            <span class="badge badge-cyan">Gemini Live Audio</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">2</span>
+                            <span class="flow-title">Dynoxide Vector DB</span>
+                        </div>
+                        <p class="flow-desc">
+                            Candidate's introduction is converted to 768-D normalized embeddings. Dynoxide vector search matches the candidate's real projects to macro competency pillars without hardcoding candidate backgrounds.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-cyan">Dynoxide / DynamoDB</span>
+                            <span class="badge badge-purple">gemini-embedding-2</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">3</span>
+                            <span class="flow-title">Dynamic Knowledge Graph</span>
+                        </div>
+                        <p class="flow-desc">
+                            Dynamically spawns nodes from matched pillars. Injects topological prerequisite and co-requisite edges. Uses prerequisite gating (P(L) ≥ 0.50) and information-entropy distance to intelligently select Alex's next topic.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-primary">Dynamic Graph</span>
+                            <span class="badge badge-green">Entropy Routing</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">4</span>
+                            <span class="flow-title">Polyglot Dialect Adaptation</span>
+                        </div>
+                        <p class="flow-desc">
+                            Scans projects for programming ecosystems (Java JVM, Python asyncio/GIL, Go channels, Rust). Injects specific technical dialect directives into Alex's live prompt per project without locking the candidate into a single global language.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-amber">Ecosystem Service</span>
+                            <span class="badge badge-primary">Prompt Injection</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 5 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">5</span>
+                            <span class="flow-title">Quarantined Shadow Evaluator</span>
+                        </div>
+                        <p class="flow-desc">
+                            Runs asynchronously via Gemini REST API in the background. Does not block voice dialogue. Generates structured JSON scoring concept depth, rubric items, and item difficulty (b ∈ [-1.5, +2.5]).
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-purple">Gemini 2.5 Flash</span>
+                            <span class="badge badge-primary">Dual-LLM Isolation</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 6 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">6</span>
+                            <span class="flow-title">BKT Mathematical Engine</span>
+                        </div>
+                        <p class="flow-desc">
+                            Executes deterministic Bayesian Knowledge Tracing. Calculates exact posterior mastery P(L_t) with slip, guess, and transit rates. Signals depth completion when mastery crosses 0.80 or 3 diagnostic turns are reached.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-green">Exact Bayesian Math</span>
+                            <span class="badge badge-primary">Deterministic FSM</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 7 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">7</span>
+                            <span class="flow-title">Real 5D MIRT Ability Radar</span>
+                        </div>
+                        <p class="flow-desc">
+                            Updates latent multidimensional ability vector (θ) across 5 canonical dimensions: algorithms, system design, concurrency, databases, and distributed systems. Computes standard errors and industry percentile rankings.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-cyan">Multidimensional IRT</span>
+                            <span class="badge badge-green">Online Gradients</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 8 -->
+                    <div class="flow-card">
+                        <div class="flow-header">
+                            <span class="flow-number-badge">8</span>
+                            <span class="flow-title">PostgreSQL Persistent Compaction</span>
+                        </div>
+                        <p class="flow-desc">
+                            Epistemic compaction saves finalized topic cards and resets Gemini Live memory for the next topic. At interview conclusion, archives Student Career Compass and Evaluator Forensic Audit reports in PostgreSQL.
+                        </p>
+                        <div class="flow-tech">
+                            <span class="badge badge-primary">PostgreSQL 5432</span>
+                            <span class="badge badge-amber">Epistemic Compaction</span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

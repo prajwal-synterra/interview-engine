@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Event Logs | Socratic AI</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .terminal-container {
+            background-color: #060911;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+        .terminal-header {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .filter-chip-group {
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            padding: 4px 0;
+        }
+        .filter-chip {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .filter-chip:hover {
+            color: var(--text-primary);
+            border-color: var(--border-light);
+        }
+        .filter-chip.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary-light);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+        .terminal-logs-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 18px 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            padding: 2px 0;
+            word-break: break-all;
+        }
+        .log-timestamp {
+            color: var(--text-dim);
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .log-tag {
+            font-weight: 700;
+            flex-shrink: 0;
+            padding: 0 4px;
+            border-radius: 3px;
+        }
+        .log-tag.bkt { color: #4ade80; background: rgba(74, 222, 128, 0.1); }
+        .log-tag.shadow { color: #c084fc; background: rgba(192, 132, 252, 0.1); }
+        .log-tag.vector { color: #38bdf8; background: rgba(56, 189, 248, 0.1); }
+        .log-tag.db { color: #818cf8; background: rgba(129, 140, 248, 0.1); }
+        .log-tag.speech { color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
+        .log-tag.proctor { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+        .log-tag.system { color: #94a3b8; }
+        .log-text { color: #e2e8f0; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div>
+                <div class="brand-section">
+                    <div class="brand-logo-icon">📜</div>
+                    <div class="brand-text-wrap">
+                        <span class="brand-title">Socratic AI</span>
+                        <span class="brand-subtitle">System Logs</span>
+                    </div>
+                </div>
+
+                <nav class="nav-menu">
+                    <div class="nav-category">Assessment</div>
+                    <a href="/" class="nav-item">
+                        <span class="nav-icon">🎙️</span>
+                        <span class="nav-text">Live Interview</span>
+                    </a>
+                    <a href="/telemetry" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">Telemetry & POC</span>
+                    </a>
+                    <a href="/reports" class="nav-item">
+                        <span class="nav-icon">📑</span>
+                        <span class="nav-text">Candidate Reports</span>
+                    </a>
+
+                    <div class="nav-category">System Deep-Dive</div>
+                    <a href="/logs" class="nav-item active">
+                        <span class="nav-icon">📜</span>
+                        <span class="nav-text">Event Logs</span>
+                        <span class="nav-badge" id="logs-count-badge">0</span>
+                    </a>
+                    <a href="/architecture" class="nav-item">
+                        <span class="nav-icon">🏛️</span>
+                        <span class="nav-text">Architecture Flow</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="user-card">
+                <div class="user-avatar">P</div>
+                <div class="user-info">
+                    <span class="user-name">Prajwal</span>
+                    <span class="user-role">Lead Evaluator</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WRAPPER -->
+        <div class="main-wrapper">
+            <!-- TOPBAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 class="page-title">Socratic Orchestration Live Logs</h1>
+                    <div class="session-live-pill">
+                        <span class="pulse-dot"></span>
+                        <span>FILE: logs/interview_engine.log</span>
+                    </div>
+                </div>
+
+                <div class="topbar-right">
+                    <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-secondary); cursor:pointer;">
+                        <input type="checkbox" id="auto-scroll" checked> Auto-Scroll
+                    </label>
+                    <button class="btn btn-secondary" onclick="fetchLogs()">🔄 Refresh</button>
+                    <button class="btn btn-secondary" onclick="clearLogsView()">🧹 Clear View</button>
+                </div>
+            </header>
+
+            <!-- PAGE BODY -->
+            <main class="page-body">
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <div class="filter-chip-group">
+                            <button class="filter-chip active" onclick="setFilter('ALL', this)">All Events</button>
+                            <button class="filter-chip" onclick="setFilter('BKT_MATH', this)">🧮 BKT Math</button>
+                            <button class="filter-chip" onclick="setFilter('SHADOW_EVAL', this)">🤖 Shadow Evaluator</button>
+                            <button class="filter-chip" onclick="setFilter('VECTOR_DB', this)">⚡ Dynoxide Vector</button>
+                            <button class="filter-chip" onclick="setFilter('DB_', this)">🐘 PostgreSQL</button>
+                            <button class="filter-chip" onclick="setFilter('SPEECH', this)">💬 Dialogue</button>
+                            <button class="filter-chip" onclick="setFilter('PROCTOR', this)">🛡️ Proctor BII</button>
+                            <button class="filter-chip" onclick="setFilter('DYNAMIC_GRAPH', this)">🕸️ Graph</button>
+                        </div>
+                        <input type="text" id="log-search-input" class="input-field" placeholder="Search logs..." oninput="renderLogs()" style="width: 200px; padding: 4px 10px; font-size: 0.78rem;">
+                    </div>
+
+                    <div class="terminal-logs-scroll" id="terminal-scroll">
+                        <div style="color:var(--text-muted); text-align:center; padding:30px;">Loading engine logs...</div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        let rawLogs = [];
+        let activeFilter = 'ALL';
+
+        async function fetchLogs() {
+            try {
+                const res = await apiRequest('/api/logs');
+                rawLogs = res.lines || [];
+                document.getElementById('logs-count-badge').textContent = rawLogs.length;
+                renderLogs();
+            } catch (e) {
+                console.error('Error fetching logs:', e);
+            }
+        }
+
+        function setFilter(filter, btn) {
+            activeFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            renderLogs();
+        }
+
+        function clearLogsView() {
+            rawLogs = [];
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('terminal-scroll');
+            const search = document.getElementById('log-search-input').value.toLowerCase();
+            const shouldScroll = document.getElementById('auto-scroll').checked;
+
+            container.innerHTML = '';
+
+            const filtered = rawLogs.filter(line => {
+                if (activeFilter !== 'ALL' && !line.includes(`[${activeFilter}`)) return false;
+                if (search && !line.toLowerCase().includes(search)) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:30px;">No log entries match the selected filter.</div>';
+                return;
+            }
+
+            filtered.forEach(line => {
+                const div = document.createElement('div');
+                div.className = 'log-entry';
+
+                // Parse line: [TIMESTAMP] [CATEGORY] Message
+                const match = line.match(/^\[(.*?)\]\s*\[(.*?)\]\s*(.*)$/);
+                if (match) {
+                    const time = match[1];
+                    const cat = match[2];
+                    const msg = match[3];
+
+                    let catClass = 'system';
+                    if (cat.includes('BKT')) catClass = 'bkt';
+                    else if (cat.includes('SHADOW') || cat.includes('GEMINI')) catClass = 'shadow';
+                    else if (cat.includes('VECTOR')) catClass = 'vector';
+                    else if (cat.includes('DB_')) catClass = 'db';
+                    else if (cat.includes('SPEECH')) catClass = 'speech';
+                    else if (cat.includes('PROCTOR')) catClass = 'proctor';
+
+                    div.innerHTML = `
+                        <span class="log-timestamp">${time.substring(11)}</span>
+                        <span class="log-tag ${catClass}">[${cat}]</span>
+                        <span class="log-text">${escapeHtml(msg)}</span>
+                    `;
+                } else {
+                    div.innerHTML = `<span class="log-text" style="color:var(--text-muted);">${escapeHtml(line)}</span>`;
+                }
+
+                container.appendChild(div);
+            });
+
+            if (shouldScroll) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchLogs();
+            setInterval(fetchLogs, 2500);
+        });
+    </script>
+</body>
+</html>

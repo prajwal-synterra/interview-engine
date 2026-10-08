@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candidate Assessment Reports | Socratic AI</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .split-reports-layout {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
+            height: calc(100vh - var(--header-height) - 48px);
+        }
+        @media (max-width: 900px) {
+            .split-reports-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+        .sessions-list-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .sessions-list-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .sessions-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .session-card-item {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .session-card-item:hover {
+            border-color: var(--border-light);
+            background-color: var(--bg-card-hover);
+            transform: translateX(2px);
+        }
+        .session-card-item.active {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.05));
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+        }
+        .report-viewer-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .report-viewer-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .tab-btn-group {
+            display: flex;
+            gap: 6px;
+            background-color: var(--bg-surface);
+            padding: 4px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+        .report-body-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 28px;
+            color: #cbd5e1;
+            font-size: 0.92rem;
+            line-height: 1.65;
+        }
+        .domain-focus-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.2));
+            border: 1px solid rgba(6, 182, 212, 0.45);
+            border-radius: 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #38bdf8;
+            letter-spacing: 0.3px;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+            margin: 4px 0;
+            width: fit-content;
+        }
+        .markdown-rendered h1 { font-family: 'Outfit'; font-size: 1.45rem; color: #f8fafc; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; }
+        .markdown-rendered h2 { font-family: 'Outfit'; font-size: 1.25rem; color: #38bdf8; margin-top: 22px; margin-bottom: 12px; border-bottom: 1px solid rgba(56, 189, 248, 0.15); padding-bottom: 6px; }
+        .markdown-rendered h3 { font-size: 1.05rem; color: var(--primary-light); margin-top: 16px; margin-bottom: 8px; }
+        .markdown-rendered table { width: 100%; border-collapse: collapse; margin: 16px 0; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+        .markdown-rendered th, .markdown-rendered td { border: 1px solid var(--border-light); padding: 8px 12px; text-align: left; }
+        .markdown-rendered th { background-color: var(--bg-surface); color: var(--text-primary); }
+        .markdown-rendered code { background: rgba(15, 23, 42, 0.9); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 7px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.84rem; font-weight: 600; box-shadow: 0 0 6px rgba(56, 189, 248, 0.15); }
+        .markdown-rendered strong { color: #f1f5f9; }
+        .markdown-rendered pre { background-color: #080d1a; border: 1px solid var(--border-subtle); padding: 14px; border-radius: 8px; overflow-x: auto; margin: 14px 0; }
+        .markdown-rendered blockquote { border-left: 4px solid var(--primary); padding-left: 14px; color: var(--text-muted); font-style: italic; margin: 14px 0; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div>
+                <div class="brand-section">
+                    <div class="brand-logo-icon">📑</div>
+                    <div class="brand-text-wrap">
+                        <span class="brand-title">Socratic AI</span>
+                        <span class="brand-subtitle">Report Archives</span>
+                    </div>
+                </div>
+
+                <nav class="nav-menu">
+                    <div class="nav-category">Assessment</div>
+                    <a href="/" class="nav-item">
+                        <span class="nav-icon">🎙️</span>
+                        <span class="nav-text">Live Interview</span>
+                    </a>
+                    <a href="/telemetry" class="nav-item">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">Telemetry & POC</span>
+                    </a>
+                    <a href="/reports" class="nav-item active">
+                        <span class="nav-icon">📑</span>
+                        <span class="nav-text">Candidate Reports</span>
+                        <span class="nav-badge" id="reports-count-badge">0</span>
+                    </a>
+
+                    <div class="nav-category">System Deep-Dive</div>
+                    <a href="/logs" class="nav-item">
+                        <span class="nav-icon">📜</span>
+                        <span class="nav-text">Event Logs</span>
+                    </a>
+                    <a href="/architecture" class="nav-item">
+                        <span class="nav-icon">🏛️</span>
+                        <span class="nav-text">Architecture Flow</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="user-card">
+                <div class="user-avatar">P</div>
+                <div class="user-info">
+                    <span class="user-name">Prajwal</span>
+                    <span class="user-role">Lead Evaluator</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WRAPPER -->
+        <div class="main-wrapper">
+            <!-- TOPBAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 class="page-title">Candidate Assessment Archives (PostgreSQL)</h1>
+                </div>
+
+                <div class="topbar-right">
+                    <button class="btn btn-secondary" onclick="loadReportsList()">
+                        <span>🔄 Reload Archives</span>
+                    </button>
+                    <a href="/" class="btn btn-primary">
+                        <span>🎙️ New Interview Session</span>
+                    </a>
+                </div>
+            </header>
+
+            <!-- PAGE BODY -->
+            <main class="page-body">
+                <div class="split-reports-layout">
+                    <!-- SESSIONS LIST -->
+                    <div class="sessions-list-panel">
+                        <div class="sessions-list-header">
+                            <input type="text" id="search-candidate" class="input-field" placeholder="Search candidate..." oninput="filterSessions()">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted);">
+                                <span>ARCHIVED SESSIONS</span>
+                                <span id="session-count-label">0 Found</span>
+                            </div>
+                        </div>
+                        <div class="sessions-scroll" id="sessions-list-container">
+                            <div style="text-align: center; color: var(--text-muted); padding: 24px;">Loading PostgreSQL archives...</div>
+                        </div>
+                    </div>
+
+                    <!-- REPORT VIEWER -->
+                    <div class="report-viewer-panel">
+                        <div class="report-viewer-header">
+                            <div>
+                                <h2 class="card-panel-title" id="selected-candidate-name">Select an Assessment</h2>
+                                <span class="card-panel-subtitle" id="selected-candidate-meta">Detailed Socratic career compass & forensic evaluation audit</span>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div class="tab-btn-group">
+                                    <button class="tab-btn active" id="btn-tab-student" onclick="switchReportTab('student')">Student Compass</button>
+                                    <button class="tab-btn" id="btn-tab-evaluator" onclick="switchReportTab('evaluator')">Evaluator Audit</button>
+                                    <button class="tab-btn" id="btn-tab-cards" onclick="switchReportTab('cards')">Compacted Memory</button>
+                                </div>
+                                <button class="btn btn-secondary" onclick="copyCurrentReport()" title="Copy to clipboard">📋 Copy</button>
+                            </div>
+                        </div>
+
+                        <div class="report-body-scroll">
+                            <div id="report-content-area" class="markdown-rendered">
+                                <div style="text-align: center; color: var(--text-muted); padding: 60px;">
+                                    <h3>👈 Choose an archived candidate report from the left sidebar</h3>
+                                    <p style="margin-top: 8px;">Reports are persisted directly in PostgreSQL with BKT mastery, MIRT 5D ability, and rubric evidence.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        let allReports = [];
+        let activeReportData = null;
+        let activeTab = 'student';
+
+        async function loadReportsList() {
+            try {
+                const res = await apiRequest('/api/reports');
+                allReports = res.reports || [];
+                document.getElementById('reports-count-badge').textContent = allReports.length;
+                document.getElementById('session-count-label').textContent = `${allReports.length} Found`;
+                renderSessionsList(allReports);
+
+                if (allReports.length > 0) {
+                    selectSession(allReports[0].session_id);
+                }
+            } catch (e) {
+                console.error('Error loading reports:', e);
+            }
+        }
+
+        function filterSessions() {
+            const query = document.getElementById('search-candidate').value.toLowerCase();
+            const filtered = allReports.filter(r => 
+                (r.candidate_name && r.candidate_name.toLowerCase().includes(query)) ||
+                (r.session_id && r.session_id.toLowerCase().includes(query)) ||
+                (r.hiring_verdict && r.hiring_verdict.toLowerCase().includes(query))
+            );
+            renderSessionsList(filtered);
+        }
+
+        function renderSessionsList(reports) {
+            const container = document.getElementById('sessions-list-container');
+            container.innerHTML = '';
+
+            if (reports.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">No reports found in PostgreSQL database.</div>';
+                return;
+            }
+
+            reports.forEach(r => {
+                const div = document.createElement('div');
+                div.className = `session-card-item ${activeReportData && activeReportData.session_id === r.session_id ? 'active' : ''}`;
+                div.id = `item-${r.session_id}`;
+                div.onclick = () => selectSession(r.session_id);
+
+                let verdictClass = 'low';
+                if (r.hiring_verdict === 'STRONG HIRE' || r.hiring_verdict === 'HIRE') verdictClass = 'low';
+                else if (r.hiring_verdict === 'LEAN HIRE') verdictClass = 'med';
+                else verdictClass = 'high';
+
+                const domainTag = r.primary_domain || r.detected_ecosystem || 'Core Systems';
+
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:var(--text-primary); font-size:0.92rem;">${r.candidate_name}</strong>
+                        <span class="pill-tag ${verdictClass}">${r.hiring_verdict}</span>
+                    </div>
+                    <div class="domain-focus-badge">🎯 ${domainTag}</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted); display:flex; justify-content:space-between;">
+                        <span>${r.seniority_tier} | ${r.detected_ecosystem || 'Polyglot'}</span>
+                        <span>Mastery: ${formatPercent(r.average_mastery)}</span>
+                    </div>
+                    <div style="font-size:0.7rem; color:var(--text-dim);">${r.generated_at || r.created_at || 'Recently'}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function selectSession(sessionId) {
+            // Update active styles
+            document.querySelectorAll('.session-card-item').forEach(el => el.classList.remove('active'));
+            const activeEl = document.getElementById(`item-${sessionId}`);
+            if (activeEl) activeEl.classList.add('active');
+
+            try {
+                const data = await apiRequest(`/api/reports/${sessionId}`);
+                activeReportData = data;
+                const domainTag = data.primary_domain || data.detected_ecosystem || '';
+                document.getElementById('selected-candidate-name').innerHTML = `
+                    <span>${data.candidate_name} (${data.seniority_tier})</span>
+                    ${domainTag ? `<span class="domain-focus-badge" style="margin-left: 10px; font-size:0.78rem;">🎯 ${domainTag}</span>` : ''}
+                `;
+                document.getElementById('selected-candidate-meta').textContent = `Session: ${sessionId} | Verdict: ${data.hiring_verdict} | Generated: ${data.generated_at}`;
+                renderActiveReportTab();
+            } catch (e) {
+                showToast('Error loading report details: ' + e.message, 'error');
+            }
+        }
+
+        function switchReportTab(tab) {
+            activeTab = tab;
+            document.getElementById('btn-tab-student').classList.toggle('active', tab === 'student');
+            document.getElementById('btn-tab-evaluator').classList.toggle('active', tab === 'evaluator');
+            document.getElementById('btn-tab-cards').classList.toggle('active', tab === 'cards');
+            renderActiveReportTab();
+        }
+
+        function renderActiveReportTab() {
+            if (!activeReportData) return;
+            const area = document.getElementById('report-content-area');
+
+            if (activeTab === 'student') {
+                const md = activeReportData.student_compass_markdown || 'No student report available.';
+                area.innerHTML = marked.parse(md);
+            } else if (activeTab === 'evaluator') {
+                const md = activeReportData.evaluator_audit_markdown || 'No evaluator audit available.';
+                area.innerHTML = marked.parse(md);
+            } else if (activeTab === 'cards') {
+                loadCompactedCardsTab();
+            }
+        }
+
+        async function loadCompactedCardsTab() {
+            const area = document.getElementById('report-content-area');
+            area.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">Fetching PostgreSQL compacted topic memory cards...</div>';
+            try {
+                const res = await apiRequest(`/api/session/${activeReportData.session_id}/compacted-cards`);
+                const cards = res.cards || [];
+                if (cards.length === 0) {
+                    area.innerHTML = '<h3>Compacted Topic Memory</h3><p>No topic cards were compacted for this candidate session.</p>';
+                    return;
+                }
+                let html = `<h2>📦 Epistemic Compacted Topic Cards (${cards.length})</h2><p>As candidate turns conclude on each topic, Gemini Live context is cleared and an epistemic summary card is permanently saved in PostgreSQL.</p><div style="display:flex; flex-direction:column; gap:14px; margin-top:16px;">`;
+                cards.forEach(c => {
+                    html += `
+                        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:16px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <strong style="color:var(--accent-cyan); font-size:1.05rem;">${c.topic_code}</strong>
+                                <span class="badge ${c.status === 'MASTERED' ? 'badge-green' : 'badge-amber'}">${c.status} (${formatPercent(c.final_mastery_p_l)})</span>
+                            </div>
+                            <p style="color:#cbd5e1; margin-bottom:6px;"><strong>Verdict:</strong> ${c.verdict_summary}</p>
+                            <div style="font-size:0.75rem; color:var(--text-muted);">Turns Spent: ${c.turns_spent} | Compacted At: ${c.created_at}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                area.innerHTML = html;
+            } catch (e) {
+                area.innerHTML = `<p style="color:var(--accent-rose);">Error loading topic cards: ${e.message}</p>`;
+            }
+        }
+
+        function copyCurrentReport() {
+            if (!activeReportData) return;
+            const md = (activeTab === 'student') ? activeReportData.student_compass_markdown : activeReportData.evaluator_audit_markdown;
+            navigator.clipboard.writeText(md).then(() => {
+                showToast('Report copied to clipboard!', 'success');
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', loadReportsList);
+    </script>
+</body>
+</html>

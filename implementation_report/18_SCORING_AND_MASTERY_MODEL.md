@@ -1,4 +1,5 @@
-﻿# 18 — Scoring and Mastery Model (Full Mathematical Derivation)
+﻿git push -u origin dev/v4
+# 18 — Scoring and Mastery Model (Full Mathematical Derivation)
 
 ## Layer 1: BKT Bayesian Posterior (per skill, per turn)
 

@@ -7,12 +7,24 @@
 !.gitignore
 !ROADMAP.md
 !EXPLANATION.md
+!ui.txt
+!Socratic Interview Engine Dashboard.png
 !app/
 !app/**
 !test/
 !test/**
+!templates/
+!templates/**
+!static/
+!static/**
+!frontend/
+!frontend/**
 
-# Ignore Python caches inside tracked dirs
+# Exclude node_modules, Python caches, and database/secrets
+frontend/node_modules/
 **/__pycache__/
 **/*.pyc
 .env
+*.db
+logs/
+test/reports/

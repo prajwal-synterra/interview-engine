@@ -523,3 +523,45 @@ class DatabaseService:
                 async with db.execute("SELECT * FROM final_reports WHERE session_id = ?;", (session_id,)) as cursor:
                     row = await cursor.fetchone()
                     return dict(row) if row else None
+
+    async def get_all_reports(self) -> List[Dict[str, Any]]:
+        """Retrieves summary of all generated final reports joined with session metadata."""
+        if not self.is_sqlite:
+            query = """
+                SELECT r.report_id, r.session_id, r.hiring_verdict, r.average_mastery,
+                       r.proctor_integrity_score, r.generated_at,
+                       s.candidate_name, s.seniority_tier, s.detected_ecosystem
+                FROM final_reports r
+                LEFT JOIN interview_sessions s ON r.session_id = s.session_id
+                ORDER BY r.generated_at DESC;
+            """
+            return await asyncio.to_thread(self._sync_pg_execute, query, None, "all")
+        else:
+            async with aiosqlite.connect(SQLITE_DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute("""
+                    SELECT r.report_id, r.session_id, r.hiring_verdict, r.average_mastery,
+                           r.proctor_integrity_score, r.generated_at,
+                           s.candidate_name, s.seniority_tier, s.detected_ecosystem
+                    FROM final_reports r
+                    LEFT JOIN interview_sessions s ON r.session_id = s.session_id
+                    ORDER BY r.generated_at DESC;
+                """) as cursor:
+                    rows = await cursor.fetchall()
+                    return [dict(r) for r in rows]
+
+    async def get_compacted_topic_cards(self, session_id: str) -> List[Dict[str, Any]]:
+        """Retrieves compacted topic cards for a session."""
+        if not self.is_sqlite:
+            query = "SELECT * FROM compacted_topic_cards WHERE session_id = %s ORDER BY created_at ASC;"
+            return await asyncio.to_thread(self._sync_pg_execute, query, (session_id,), "all")
+        else:
+            async with aiosqlite.connect(SQLITE_DB_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                async with db.execute(
+                    "SELECT * FROM compacted_topic_cards WHERE session_id = ? ORDER BY created_at ASC;",
+                    (session_id,)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    return [dict(r) for r in rows]
+

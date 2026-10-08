@@ -1,0 +1,2486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socratic AI Interview Studio | Executive Voice Assessment</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Two-Column Studio Layout */
+        .studio-split-layout {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 20px;
+            height: calc(100vh - var(--header-height) - 48px);
+            overflow: hidden;
+        }
+        @media (max-width: 1200px) {
+            .studio-split-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+                overflow-y: auto;
+            }
+        }
+
+        /* Voice Stage Left */
+        .voice-console-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .voice-stage-card {
+            background: radial-gradient(ellipse at 50% 50%, #152238 0%, #0b0f19 85%);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 14px 20px 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .wave-canvas-wrapper {
+            width: 100%;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #wave-canvas { width: 100%; height: 100%; }
+
+        /* Chat / Transcript Stream */
+        .chat-stream-scroll {
+            flex: 1;
+            padding: 18px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .message-bubble {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            line-height: 1.55;
+            font-size: 0.9rem;
+            position: relative;
+            animation: messageFadeIn 0.25s ease-out;
+        }
+
+        @keyframes messageFadeIn {
+            0% { opacity: 0; transform: translateY(6px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-bubble.ai {
+            align-self: flex-start;
+            background: linear-gradient(135deg, #0f172a, #1a2238);
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            border-left: 3px solid var(--accent-cyan);
+            color: #f1f5f9;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+
+        .message-bubble.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #172554, #1e1b4b);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            border-right: 3px solid #6366f1;
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        }
+
+        .message-bubble.user.live-recording {
+            border-color: rgba(6, 182, 212, 0.7);
+            border-right: 3px solid var(--accent-cyan);
+            box-shadow: 0 0 16px rgba(6, 182, 212, 0.25);
+            animation: pulseCandidateLive 1.8s infinite;
+        }
+
+        @keyframes pulseCandidateLive {
+            0% { box-shadow: 0 0 6px rgba(6, 182, 212, 0.2); }
+            50% { box-shadow: 0 0 18px rgba(6, 182, 212, 0.45); }
+            100% { box-shadow: 0 0 6px rgba(6, 182, 212, 0.2); }
+        }
+
+        .bubble-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.72rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .bubble-header.ai { color: var(--accent-cyan); }
+        .bubble-header.user { color: #818cf8; }
+
+        .bubble-body {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Interim STT Bar */
+        .interim-stt-bar {
+            padding: 8px 18px;
+            background-color: rgba(6, 182, 212, 0.08);
+            border-top: 1px solid rgba(6, 182, 212, 0.2);
+            font-size: 0.8rem;
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 36px;
+        }
+
+        /* Audio Console Footer Controls */
+        .console-footer-controls {
+            padding: 14px 20px;
+            background-color: var(--bg-surface);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-mic-record {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: #f8fafc;
+            border: 1px solid #475569;
+            padding: 10px 18px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-mic-record.recording {
+            background: linear-gradient(135deg, #b91c1c, #ef4444);
+            border-color: #f87171;
+            box-shadow: 0 0 16px rgba(239, 68, 68, 0.45);
+            animation: pulseRecord 1.1s infinite;
+        }
+
+        @keyframes pulseRecord {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        /* Right Telemetry Column */
+        .telemetry-cockpit-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .cockpit-tabs-header {
+            display: flex;
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 6px 12px;
+            gap: 6px;
+        }
+
+        .cockpit-tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .cockpit-tab-btn.active {
+            background: var(--bg-card);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+        }
+
+        .cockpit-tab-pane {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .cockpit-tab-pane.active {
+            display: flex;
+        }
+
+        /* Flow trace step card */
+        .trace-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: border-color 0.2s;
+        }
+        .trace-card.active-step {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
+        }
+        .trace-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Paused warning banner */
+        .paused-banner {
+            display: none;
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.25));
+            border: 1px solid var(--accent-amber);
+            border-radius: var(--radius-md);
+            padding: 10px 16px;
+            margin: 10px 20px 0;
+            color: #fef3c7;
+            font-size: 0.85rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .paused-banner.active { display: flex; }
+
+        /* Graphical Decision Workflow Diagram */
+        .workflow-node {
+            display: flex;
+            gap: 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 11px 14px;
+            transition: all 0.25s ease;
+            position: relative;
+        }
+        .workflow-node:hover {
+            border-color: var(--border-light);
+            background: var(--bg-card-hover);
+        }
+        .workflow-node.highlight {
+            border-left: 3px solid var(--accent-amber);
+            background: rgba(245, 158, 11, 0.05);
+        }
+        .wf-node-icon {
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+        }
+        .wf-node-content {
+            flex: 1;
+            min-width: 0;
+        }
+        .wf-node-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .wf-node-body {
+            font-size: 0.76rem;
+            color: var(--text-secondary);
+            margin-top: 3px;
+            line-height: 1.45;
+        }
+        .wf-connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 1px 0 1px 26px;
+        }
+        .wf-connector-line {
+            width: 2px;
+            height: 8px;
+            background: var(--border-subtle);
+        }
+        .wf-connector-arrow {
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            line-height: 1;
+        }
+        .chip-mirt {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono';
+            font-size: 0.68rem;
+            color: #94a3b8;
+        }
+        .mini-stat-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 6px 8px;
+            text-align: center;
+        }
+        .mini-stat-label {
+            font-size: 0.62rem;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+        .mini-stat-val {
+            font-size: 0.95rem;
+            font-weight: 800;
+            font-family: 'JetBrains Mono';
+            margin-top: 1px;
+        }
+        .midway-turn-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 12px 14px;
+            border-left: 3px solid var(--primary);
+            transition: border-color 0.2s;
+        }
+        .midway-turn-card:hover {
+            border-color: var(--primary-light);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- SIDEBAR (FlowMail Style) -->
+        <aside class="sidebar">
+            <div>
+                <div class="brand-section">
+                    <div class="brand-logo-icon">🎙️</div>
+                    <div class="brand-text-wrap">
+                        <span class="brand-title">Socratic AI</span>
+                        <span class="brand-subtitle">Voice Assessment</span>
+                    </div>
+                </div>
+
+                <nav class="nav-menu">
+                    <div class="nav-category">Assessment</div>
+                    <a href="/" class="nav-item active">
+                        <span class="nav-icon">🎙️</span>
+                        <span class="nav-text">Live Interview</span>
+                        <span class="nav-badge" id="sidebar-live-badge">READY</span>
+                    </a>
+                    <a href="/telemetry" id="nav-link-telemetry" target="_blank" rel="noopener noreferrer" class="nav-item" title="Open Live Telemetry in a new tab without interrupting your active interview">
+                        <span class="nav-icon">📊</span>
+                        <span class="nav-text">Telemetry & POC</span>
+                        <span class="nav-badge" style="background: rgba(6,182,212,0.15); color: var(--accent-cyan); font-size: 0.65rem;">↗ NEW TAB</span>
+                    </a>
+                    <a href="/reports" target="_blank" rel="noopener noreferrer" class="nav-item" title="Open Candidate Assessment Archives in a new tab">
+                        <span class="nav-icon">📑</span>
+                        <span class="nav-text">Candidate Reports</span>
+                        <span class="nav-badge" style="background: rgba(139,92,246,0.15); color: var(--accent-purple); font-size: 0.65rem;">↗ NEW TAB</span>
+                    </a>
+
+                    <div class="nav-category">System Deep-Dive</div>
+                    <a href="/logs" target="_blank" rel="noopener noreferrer" class="nav-item" title="Open Event Logs in a new tab">
+                        <span class="nav-icon">📜</span>
+                        <span class="nav-text">Event Logs</span>
+                        <span class="nav-badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1; font-size: 0.65rem;">↗</span>
+                    </a>
+                    <a href="/architecture" target="_blank" rel="noopener noreferrer" class="nav-item" title="Open Architecture Flow in a new tab">
+                        <span class="nav-icon">🏛️</span>
+                        <span class="nav-text">Architecture Flow</span>
+                        <span class="nav-badge" style="background: rgba(148,163,184,0.15); color: #cbd5e1; font-size: 0.65rem;">↗</span>
+                    </a>
+                </nav>
+            </div>
+
+            <div class="user-card">
+                <div class="user-avatar">P</div>
+                <div class="user-info">
+                    <span class="user-name">Prajwal</span>
+                    <span class="user-role">Lead Evaluator</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WRAPPER -->
+        <div class="main-wrapper">
+            <!-- TOPBAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 class="page-title">Autonomous Socratic Voice Studio</h1>
+                    <div class="session-live-pill" id="topbar-session-pill">
+                        <span class="pulse-dot" id="topbar-pulse-dot"></span>
+                        <span id="topbar-status-text">Alex Standby</span>
+                    </div>
+                </div>
+
+                <div class="topbar-right">
+                    <input type="text" id="candidate-name-input" class="input-field" placeholder="Candidate Name" value="Prajwal" style="width: 130px;">
+                    <select id="interview-level-select" class="select-field">
+                        <option value="STUDENT">Student / Fresher</option>
+                        <option value="MEDIUM" selected>Medium (Mid-Level)</option>
+                        <option value="HARD">Hard (Staff Engineer)</option>
+                    </select>
+
+                    <select id="speaking-pace-select" class="select-field" title="Speaking Pace & Silence Pause Tolerance before submitting" style="width: 175px;">
+                        <option value="6000">🐢 Deliberate (6s pause)</option>
+                        <option value="4000" selected>🚶 Normal (4s pause)</option>
+                        <option value="2500">🐇 Fast (2.5s pause)</option>
+                        <option value="manual">🛑 Manual Spacebar only</option>
+                    </select>
+
+                    <button class="btn btn-success" id="btn-start-session" onclick="startInterview()">
+                        <span>🎙️ Start Session</span>
+                    </button>
+
+                    <!-- PAUSE / RESUME BUTTON (USER REQUIREMENT) -->
+                    <button class="btn btn-warning" id="btn-pause-session" onclick="togglePauseSession()" style="display: none;">
+                        <span id="btn-pause-text">⏸️ Pause Interview</span>
+                    </button>
+
+                    <!-- CURRENT STATE REPORT BUTTON (USER REQUIREMENT) -->
+                    <button class="btn btn-secondary" id="btn-current-report" onclick="openCurrentStateReport()" style="display: none;">
+                        <span>📊 Current State Report</span>
+                    </button>
+
+                    <button class="btn btn-danger" id="btn-end-session" onclick="finishInterview()" style="display: none;">
+                        <span>📑 Finish & Reports</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- PAGE BODY -->
+            <main class="page-body">
+                <!-- PAUSED WARNING BANNER -->
+                <div class="paused-banner" id="paused-banner">
+                    <span>⏸️ <strong>Conversation Paused:</strong> Voice interaction is frozen. You can inspect the current state report on-the-fly or click Resume to continue.</span>
+                    <button class="btn btn-primary" onclick="openCurrentStateReport()" style="padding: 4px 12px; font-size: 0.78rem;">View Current Report</button>
+                </div>
+
+                <!-- MAIN SPLIT STUDIO LAYOUT -->
+                <div class="studio-split-layout">
+                    <!-- LEFT: VOICE CONSOLE & TRANSCRIPT -->
+                    <div class="voice-console-panel">
+                        <!-- Waveform Stage -->
+                        <div class="voice-stage-card">
+                            <div style="display: flex; justify-content: space-between; width: 100%; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px;">
+                                <span id="agent-voice-state">🎙️ Microphone Standby</span>
+                                <span id="active-pillar-badge" class="badge badge-cyan">Phase: ONBOARDING</span>
+                            </div>
+                            <div class="wave-canvas-wrapper">
+                                <canvas id="wave-canvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Chat & Live Dialogue Scroll -->
+                        <div class="chat-stream-scroll" id="chat-container">
+                            <div class="message-bubble ai">
+                                <div class="bubble-header ai">
+                                    <span>Alex (Principal Engineer AI)</span>
+                                    <span>Standby</span>
+                                </div>
+                                <div class="bubble-body">
+                                    Welcome! Click <strong>Start Session</strong> above to begin your adaptive technical interview.
+                                    Alex will greet you over live audio. Tap <strong>Speak (Space)</strong> to answer, or click <strong>Pause</strong> at any moment to inspect the current assessment report.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Interim Speech Stream Bar -->
+                        <div class="interim-stt-bar" id="interim-stt-bar">
+                            <span>🎙️ <strong>Live Speech:</strong> Awaiting input...</span>
+                        </div>
+
+                        <!-- Console Footer Controls -->
+                        <div class="console-footer-controls">
+                            <button class="btn btn-secondary" id="btn-interrupt" onclick="interruptAlex()" style="display:none; color:var(--accent-rose); border-color:var(--accent-rose);">
+                                ✋ Interrupt
+                            </button>
+                            <button class="btn-mic-record" id="btn-mic" onclick="toggleMicrophone()" disabled>
+                                🎙️ Tap to Speak (Space)
+                            </button>
+                            <input type="text" id="input-box" class="input-field" placeholder="Or type your technical explanation here and press Enter..." style="flex:1;" disabled>
+                            <button class="btn btn-primary" id="btn-send" onclick="sendManualText()" disabled>
+                                Send
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: REAL-TIME ORCHESTRATION COCKPIT -->
+                    <div class="telemetry-cockpit-panel">
+                        <div class="cockpit-tabs-header">
+                            <button class="cockpit-tab-btn active" id="tab-btn-flow" onclick="switchCockpitTab('flow')">🔄 Decision Flow</button>
+                            <button class="cockpit-tab-btn" id="tab-btn-midway" onclick="switchCockpitTab('midway')">📑 Midway Audit</button>
+                            <button class="cockpit-tab-btn" id="tab-btn-trace" onclick="switchCockpitTab('trace')">⚡ Live Trace</button>
+                            <button class="cockpit-tab-btn" id="tab-btn-rubric" onclick="switchCockpitTab('rubric')">📋 Rubric</button>
+                            <button class="cockpit-tab-btn" id="tab-btn-math" onclick="switchCockpitTab('math')">🧮 BKT Math</button>
+                            <button class="cockpit-tab-btn" id="tab-btn-radar" onclick="switchCockpitTab('radar')">🎯 MIRT Radar</button>
+                        </div>
+
+                        <!-- PANE: GRAPHICAL DECISION & SCORE EVOLUTION WORKFLOW -->
+                        <div class="cockpit-tab-pane active" id="pane-flow">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                                    Live Socratic Decision Pipeline
+                                </span>
+                                <span class="badge badge-purple" id="flow-turn-indicator">TURN #0: STANDBY</span>
+                            </div>
+
+                            <!-- Node 1: Candidate Input -->
+                            <div class="workflow-node" id="wf-node-input">
+                                <div class="wf-node-icon">🎙️</div>
+                                <div class="wf-node-content">
+                                    <div class="wf-node-title">
+                                        <span>1. Candidate Speech Input</span>
+                                        <span class="badge badge-cyan" id="wf-clean-badge">RAW SPEECH</span>
+                                    </div>
+                                    <div class="wf-node-body" id="wf-input-text">Awaiting candidate speech...</div>
+                                </div>
+                            </div>
+
+                            <div class="wf-connector">
+                                <div class="wf-connector-line"></div>
+                                <div class="wf-connector-arrow">▼</div>
+                            </div>
+
+                            <!-- Node 2: Shadow Evaluator -->
+                            <div class="workflow-node" id="wf-node-eval">
+                                <div class="wf-node-icon">🧠</div>
+                                <div class="wf-node-content">
+                                    <div class="wf-node-title">
+                                        <span>2. Shadow Evaluator (Gemini 2.5 REST)</span>
+                                        <span class="badge badge-purple" id="wf-eval-obs">Observation: --</span>
+                                    </div>
+                                    <div class="wf-node-body" id="wf-eval-summary">Assessing technical depth, domain abstractions, and trade-off awareness.</div>
+                                    <div style="margin-top: 6px;">
+                                        <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-muted); margin-bottom: 2px;">
+                                            <span>Technical Depth Score</span>
+                                            <span id="wf-depth-percent">--%</span>
+                                        </div>
+                                        <div style="background: rgba(255,255,255,0.08); height: 6px; border-radius: 3px; overflow: hidden;">
+                                            <div id="wf-depth-bar" style="background: var(--accent-cyan); height: 100%; width: 0%; transition: width 0.4s ease;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="wf-connector">
+                                <div class="wf-connector-line"></div>
+                                <div class="wf-connector-arrow">▼</div>
+                            </div>
+
+                            <!-- Node 3: BKT Bayesian Update & Posterior Shift -->
+                            <div class="workflow-node" id="wf-node-bkt">
+                                <div class="wf-node-icon">🧮</div>
+                                <div class="wf-node-content">
+                                    <div class="wf-node-title">
+                                        <span>3. BKT Bayesian Posterior Shift</span>
+                                        <span class="badge badge-green" id="wf-bkt-delta">Δ: +0.0000</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; background: rgba(0,0,0,0.25); padding: 6px 10px; border-radius: 6px; font-family: 'JetBrains Mono'; font-size: 0.78rem;">
+                                        <span style="color: var(--text-muted);" id="wf-bkt-prior">Prior: 0.350</span>
+                                        <span style="color: var(--accent-cyan);">➔</span>
+                                        <span style="color: var(--accent-emerald); font-weight: 700;" id="wf-bkt-post">Post: 0.350</span>
+                                        <span class="badge badge-amber" id="wf-bkt-status" style="font-size: 0.65rem;">IN_PROGRESS</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="wf-connector">
+                                <div class="wf-connector-line"></div>
+                                <div class="wf-connector-arrow">▼</div>
+                            </div>
+
+                            <!-- Node 4: MIRT 5D Ability Update -->
+                            <div class="workflow-node" id="wf-node-mirt">
+                                <div class="wf-node-icon">🎯</div>
+                                <div class="wf-node-content">
+                                    <div class="wf-node-title">
+                                        <span>4. MIRT Multi-Dimensional Ability (θ)</span>
+                                        <span class="badge badge-cyan" id="wf-mirt-focus">CALIBRATED</span>
+                                    </div>
+                                    <div id="wf-mirt-pills" style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px;">
+                                        <span class="chip-mirt" id="chip-algo">Algo: 0.00</span>
+                                        <span class="chip-mirt" id="chip-sys">Sys: 0.00</span>
+                                        <span class="chip-mirt" id="chip-concur">Concur: 0.00</span>
+                                        <span class="chip-mirt" id="chip-db">DB: 0.00</span>
+                                        <span class="chip-mirt" id="chip-dist">Dist: 0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="wf-connector">
+                                <div class="wf-connector-line"></div>
+                                <div class="wf-connector-arrow">▼</div>
+                            </div>
+
+                            <!-- Node 5: Policy FSM Decision & Directive -->
+                            <div class="workflow-node highlight" id="wf-node-fsm">
+                                <div class="wf-node-icon">⚖️</div>
+                                <div class="wf-node-content">
+                                    <div class="wf-node-title">
+                                        <span>5. Policy FSM Decision & Directive</span>
+                                        <span class="badge badge-amber" id="wf-fsm-action">ACTION: DIAGNOSTIC</span>
+                                    </div>
+                                    <div style="font-size: 0.76rem; color: #fde68a; margin-top: 4px;" id="wf-fsm-directive">
+                                        [DIRECTIVE]: System assessing baseline seniority and fundamentals.
+                                    </div>
+                                    <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 4px;" id="wf-fsm-transition">
+                                        Transition: INITIAL ➔ ACTIVE (Scaffolding L0)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PANE: MIDWAY REPORT & TURN-BY-TURN AUDIT -->
+                        <div class="cockpit-tab-pane" id="pane-midway">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div>
+                                    <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                                        Midway Progress Snapshot
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                                        Score deltas and pedagogical interventions.
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary" onclick="openCurrentStateReport()" style="padding: 4px 10px; font-size: 0.75rem;">
+                                    📊 Full Snapshot Report
+                                </button>
+                            </div>
+
+                            <!-- Midway Score Delta Summary Bar -->
+                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
+                                <div class="mini-stat-card">
+                                    <div class="mini-stat-label">TURNS</div>
+                                    <div class="mini-stat-val" id="midway-total-turns">0</div>
+                                </div>
+                                <div class="mini-stat-card">
+                                    <div class="mini-stat-label">BKT P(L)</div>
+                                    <div class="mini-stat-val" id="midway-current-bkt" style="color: var(--accent-emerald);">0.35</div>
+                                </div>
+                                <div class="mini-stat-card">
+                                    <div class="mini-stat-label">BII PROCTOR</div>
+                                    <div class="mini-stat-val" id="midway-current-bii" style="color: var(--accent-cyan);">1.00</div>
+                                </div>
+                                <div class="mini-stat-card">
+                                    <div class="mini-stat-label">STATE</div>
+                                    <div class="mini-stat-val" id="midway-current-state" style="color: var(--accent-amber); font-size: 0.72rem;">ACTIVE</div>
+                                </div>
+                            </div>
+
+                            <!-- Chronological stream of turn cards -->
+                            <div id="midway-turns-container" style="display: flex; flex-direction: column; gap: 10px; max-height: 480px; overflow-y: auto;">
+                                <div style="text-align: center; color: var(--text-muted); padding: 30px; font-size: 0.8rem;">
+                                    Interaction cards will appear here after each turn with full score changes and decisions.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PANE 1: LIVE ALGORITHM TRACE -->
+                        <div class="cockpit-tab-pane" id="pane-trace">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                                <span>Multi-Agent Execution Pipeline</span>
+                                <span id="pipeline-status-badge" style="color: var(--accent-cyan);">ACTIVE PIPELINE</span>
+                            </div>
+
+                            <!-- Stage 1: Candidate Input -->
+                            <div class="trace-card" id="trace-step-1">
+                                <div class="trace-card-header">
+                                    <strong style="color: var(--accent-cyan); font-size: 0.8rem;">1. Candidate Audio / Text Input</strong>
+                                    <span class="badge badge-cyan" id="trace-latency-badge">Latency: -- ms</span>
+                                </div>
+                                <div style="font-size: 0.78rem; color: #cbd5e1;" id="trace-input-snippet">Awaiting candidate speech response...</div>
+                            </div>
+
+                            <!-- Stage 2: Shadow Evaluator -->
+                            <div class="trace-card" id="trace-step-2">
+                                <div class="trace-card-header">
+                                    <strong style="color: var(--accent-purple); font-size: 0.8rem;">2. Shadow Evaluator (Gemini 2.5 REST)</strong>
+                                    <span class="badge badge-purple" id="trace-obs-badge">Observation: --</span>
+                                </div>
+                                <div style="font-size: 0.78rem; color: #cbd5e1;" id="trace-shadow-summary">Quarantined async background evaluator assessing technical depth and trade-offs.</div>
+                            </div>
+
+                            <!-- Stage 3: BKT Math -->
+                            <div class="trace-card" id="trace-step-3">
+                                <div class="trace-card-header">
+                                    <strong style="color: var(--accent-emerald); font-size: 0.8rem;">3. BKT Bayesian Mathematics</strong>
+                                    <span class="badge badge-green" id="trace-bkt-badge">Δ: +0.0000</span>
+                                </div>
+                                <div style="font-family: 'JetBrains Mono'; font-size: 0.75rem; color: #a7f3d0;" id="trace-bkt-calc">Prior: 0.3500 → Posterior: 0.3500</div>
+                            </div>
+
+                            <!-- Stage 4: Policy FSM -->
+                            <div class="trace-card" id="trace-step-4">
+                                <div class="trace-card-header">
+                                    <strong style="color: var(--accent-amber); font-size: 0.8rem;">4. FSM Policy Router & Pedagogy</strong>
+                                    <span class="badge badge-amber" id="trace-fsm-badge">DIAGNOSTIC</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: #fde68a;" id="trace-fsm-directive">[DIRECTIVE]: System assessing baseline seniority and fundamentals.</div>
+                            </div>
+
+                            <!-- Stage 5: Proctor -->
+                            <div class="trace-card" id="trace-step-5">
+                                <div class="trace-card-header">
+                                    <strong style="color: var(--primary-light); font-size: 0.8rem;">5. Proctor & Latency Integrity</strong>
+                                    <span class="badge badge-primary" id="trace-proctor-badge">BII: 1.000 (NOMINAL)</span>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Behavioral integrity index tracking fluency, response latency anomalies, and coherence.</div>
+                            </div>
+                        </div>
+
+                        <!-- PANE 2: RUBRIC EVALUATION & JSON -->
+                        <div class="cockpit-tab-pane" id="pane-rubric">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong id="rubric-active-topic" style="color: var(--accent-cyan); font-size: 0.85rem;">TOPIC: ONBOARDING</strong>
+                                <span class="badge badge-green" id="rubric-depth-badge">Depth: 70%</span>
+                            </div>
+                            <div id="rubric-items-container" style="display: flex; flex-direction: column; gap: 8px;">
+                                <div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">Rubric evaluations will populate as candidate responds.</div>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px;">RAW EVALUATOR JSON:</div>
+                                <pre id="rubric-raw-json" style="background:#080d1a; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); font-family:'JetBrains Mono'; font-size:0.75rem; max-height:160px; overflow:auto; color:var(--accent-cyan);">{ "status": "standby" }</pre>
+                            </div>
+                        </div>
+
+                        <!-- PANE 3: BKT MATH & FSM -->
+                        <div class="cockpit-tab-pane" id="pane-math">
+                            <div class="code-snippet" style="font-size:0.75rem;">
+                                P(L_t | obs) = [P(L_{t-1}) · P(obs|L)] / P(obs)
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div style="background:var(--bg-surface); padding:8px; border-radius:6px; border:1px solid var(--border-subtle);">
+                                    <div style="font-size:0.68rem; color:var(--text-muted);">CURRENT MASTERY P(L)</div>
+                                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:var(--accent-emerald);" id="pane-math-pl">0.3500</div>
+                                </div>
+                                <div style="background:var(--bg-surface); padding:8px; border-radius:6px; border:1px solid var(--border-subtle);">
+                                    <div style="font-size:0.68rem; color:var(--text-muted);">SCAFFOLDING LEVEL</div>
+                                    <div style="font-family:'JetBrains Mono'; font-weight:700; color:var(--accent-amber);" id="pane-math-scaffold">L0 (Free Response)</div>
+                                </div>
+                            </div>
+                            <div style="font-size:0.75rem; color:var(--text-secondary); line-height:1.5;">
+                                <strong>Depth Termination Guarantee:</strong> Alex advances to the next topic as soon as mastery reaches <strong>80% (P(L) ≥ 0.80)</strong> or <strong>3 diagnostic turns</strong> conclude. Upon completion, context memory is compacted into PostgreSQL.
+                            </div>
+                        </div>
+
+                        <!-- PANE 4: MIRT RADAR -->
+                        <div class="cockpit-tab-pane" id="pane-radar">
+                            <div style="position:relative; height: 220px; width: 100%;">
+                                <canvas id="miniMirtRadarChart"></canvas>
+                            </div>
+                            <div style="font-size:0.72rem; color:var(--text-muted); text-align:center;">
+                                Live 5-Dimensional MIRT Ability Latent Vector (θ)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- CURRENT STATE REPORT MODAL DRAWER (USER REQUIREMENT) -->
+    <div class="modal-overlay" id="current-report-modal">
+        <div class="modal-box" style="width: 950px;">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="current-report-title">Live Assessment Current State Snapshot</h2>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">Generated on-demand while interview is in-progress (non-terminating)</span>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('current-report-modal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <button class="btn btn-secondary active" id="modal-tab-student" onclick="switchModalReportTab('student')">Student Career Compass</button>
+                    <button class="btn btn-secondary" id="modal-tab-evaluator" onclick="switchModalReportTab('evaluator')">Evaluator Forensic Audit</button>
+                    <button class="btn btn-secondary" id="modal-tab-workflow" onclick="switchModalReportTab('workflow')">🔄 Decision Flow & Score History</button>
+                </div>
+                <div id="modal-report-rendered" class="markdown-rendered" style="background: var(--bg-surface); padding: 20px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); max-height: 55vh; overflow-y: auto;">
+                    <div style="text-align: center; color: var(--text-muted); padding: 30px;">Compiling intermediate live report...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('current-report-modal')">Close Snapshot</button>
+                <button class="btn btn-success" onclick="resumeFromModal()">▶️ Resume Conversation</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+    <script>
+        // WebSocket & Voice Studio State
+        let ws = null;
+        let isSessionActive = false;
+        let isPaused = false;
+        let isAlexSpeaking = false;
+        let alexTurnCompleteReceived = false;
+        let currentSessionId = null;
+
+        // Audio Output Engine (Alex 24kHz playback with zero-jitter scheduling)
+        let audioCtx = null;
+        let analyser = null;
+        let freqData = null;
+        let nextPlayTime = 0;
+        let activeAudioSources = [];
+
+        // Audio Input Engine (Candidate Microphone + 16kHz PCM streaming + Web Speech API)
+        let mediaStream = null;
+        let micAudioCtx = null;
+        let micAnalyser = null;
+        let micDataArray = null;
+        let micProcessor = null;   // ScriptProcessorNode (fallback)
+        let micWorkletNode = null; // AudioWorkletNode (primary)
+        let micWorkletReady = false;
+        let isRecording = false;
+        let isStreaming = false;
+        let speechRec = null;
+        let clientLiveTranscript = "";
+        let finalSpeechAccumulator = "";
+        let silenceTimer = null;
+
+        let miniMirtChart = null;
+        let currentAiMessageBody = null;
+        let currentUserBubble = null;
+        let currentUserMessageBody = null;
+        let geminiLiveSttAccumulator = "";
+        let currentInterimText = "";
+        let intermediateReportData = null;
+        let modalActiveTab = 'student';
+        let cachedTurnsHistory = [];
+
+        // Real-Time Audio Waveform Visualizer
+        const canvas = document.getElementById("wave-canvas");
+        const canvasCtx = canvas.getContext("2d");
+        let wavePhase = 0;
+
+        function drawWave() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = 72;
+            canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerY = height / 2;
+
+            // Measure actual voice volume from active AudioNodes
+            let voiceVolume = 0;
+            if (isAlexSpeaking && analyser && freqData) {
+                analyser.getByteFrequencyData(freqData);
+                let sum = 0;
+                for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+                voiceVolume = sum / freqData.length;
+            } else if (isRecording && micAnalyser && micDataArray) {
+                micAnalyser.getByteFrequencyData(micDataArray);
+                let sum = 0;
+                for (let i = 0; i < micDataArray.length; i++) sum += micDataArray[i];
+                voiceVolume = sum / micDataArray.length;
+            }
+
+            const isLiveVoice = voiceVolume > 4;
+            const targetAmp = isLiveVoice ? Math.min(30, 8 + voiceVolume * 0.4) : (isPaused ? 2 : (isSessionActive ? 5 : 3));
+
+            canvasCtx.beginPath();
+            canvasCtx.lineWidth = isRecording ? 3 : (isPaused ? 1.5 : 2);
+            canvasCtx.strokeStyle = isPaused ? '#f59e0b' : (isRecording ? '#ef4444' : (isAlexSpeaking ? '#06b6d4' : '#10b981'));
+
+            for (let x = 0; x < width; x++) {
+                const freq = isLiveVoice ? 0.04 : 0.025;
+                const y = centerY + Math.sin(x * freq + wavePhase) * targetAmp * Math.sin(x / width * Math.PI);
+                if (x === 0) canvasCtx.moveTo(x, y);
+                else canvasCtx.lineTo(x, y);
+            }
+            canvasCtx.stroke();
+            wavePhase += isLiveVoice ? 0.10 : (isPaused ? 0.01 : 0.035);
+            requestAnimationFrame(drawWave);
+        }
+        drawWave();
+
+        // Mini MIRT Chart in Cockpit
+        function initMiniMirtChart() {
+            const ctx = document.getElementById('miniMirtRadarChart').getContext('2d');
+            miniMirtChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Algo', 'SysDesign', 'Concur', 'DB', 'DistSys'],
+                    datasets: [{
+                        label: 'Latent θ',
+                        data: [0.0, 0.0, 0.0, 0.0, 0.0],
+                        backgroundColor: 'rgba(99, 102, 241, 0.25)',
+                        borderColor: '#6366f1',
+                        borderWidth: 2,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            min: -1.5,
+                            max: 2.0,
+                            ticks: { display: false },
+                            grid: { color: 'rgba(255, 255, 255, 0.08)' },
+                            pointLabels: { color: '#94a3b8', font: { size: 10 } }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+        initMiniMirtChart();
+
+        // Reset Studio Telemetry & UI to Initial Values
+        function resetStudioState(candidateName) {
+            currentSessionId = null;
+            sessionStorage.removeItem("active_interview_session_id");
+            isPaused = false;
+            isAlexSpeaking = false;
+            alexTurnCompleteReceived = false;
+            clientLiveTranscript = "";
+            finalSpeechAccumulator = "";
+            geminiLiveSttAccumulator = "";
+            currentAiMessageBody = null;
+            currentUserBubble = null;
+            currentUserMessageBody = null;
+            clearTimeout(silenceTimer);
+
+            // 1. Reset Topbar & Voice State
+            setStageStatus("Alex Standby", "connecting");
+            document.getElementById("active-pillar-badge").className = "badge badge-cyan";
+            document.getElementById("active-pillar-badge").textContent = "Topic: ONBOARDING";
+            document.getElementById("interim-stt-bar").innerHTML = `🎙️ <strong>Live Speech:</strong> Standby — Click Speak or press Space when ready.`;
+
+            // 2. Clear Chat & Restore Fresh Welcome
+            const chat = document.getElementById("chat-container");
+            chat.innerHTML = `
+                <div class="message-bubble ai">
+                    <div class="bubble-header ai">
+                        <span>Alex (Principal Engineer AI)</span>
+                        <span>Just Now</span>
+                    </div>
+                    <div class="bubble-body">
+                        Welcome <strong>${candidateName}</strong>! Connecting to the Socratic audio engine...
+                        Alex will greet you over live voice. Speak at your natural pace, or press <strong>Space</strong> when finished speaking.
+                    </div>
+                </div>
+            `;
+
+            // 3. Reset Trace Pane Cards
+            document.getElementById("trace-latency-badge").textContent = "Latency: -- ms";
+            document.getElementById("trace-input-snippet").textContent = "Awaiting candidate speech response...";
+            document.getElementById("trace-obs-badge").textContent = "Observation: --";
+            document.getElementById("trace-obs-badge").className = "badge badge-purple";
+            document.getElementById("trace-shadow-summary").textContent = "Quarantined async background evaluator assessing technical depth and trade-offs.";
+            document.getElementById("trace-bkt-badge").textContent = "Δ: +0.0000";
+            document.getElementById("trace-bkt-badge").className = "badge badge-green";
+            document.getElementById("trace-bkt-calc").textContent = "Prior: 0.3500 → Posterior: 0.3500";
+            document.getElementById("trace-fsm-badge").textContent = "DIAGNOSTIC";
+            document.getElementById("trace-fsm-directive").textContent = "[DIRECTIVE]: System assessing baseline seniority and fundamentals.";
+            document.getElementById("trace-proctor-badge").textContent = "BII: 1.000 (NOMINAL)";
+            document.getElementById("trace-proctor-badge").className = "badge badge-primary";
+
+            // 4. Reset Rubric Pane
+            document.getElementById("rubric-active-topic").textContent = "TOPIC: ONBOARDING";
+            document.getElementById("rubric-depth-badge").textContent = "Depth: --";
+            document.getElementById("rubric-items-container").innerHTML = `
+                <div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 20px;">
+                    Rubric evaluations will populate as candidate responds.
+                </div>
+            `;
+            document.getElementById("rubric-raw-json").textContent = JSON.stringify({ status: "standby" }, null, 2);
+
+            // 5. Reset BKT Math Pane
+            document.getElementById("pane-math-pl").textContent = "0.3500";
+            document.getElementById("pane-math-scaffold").textContent = "L0 (Free Response)";
+
+            // 6. Reset Mini MIRT Radar Chart
+            if (miniMirtChart) {
+                miniMirtChart.data.datasets[0].data = [0.0, 0.0, 0.0, 0.0, 0.0];
+                miniMirtChart.update();
+            }
+
+            // 7. Reset Banners & Mic Button
+            document.getElementById("paused-banner").classList.remove("active");
+            document.getElementById("btn-pause-text").textContent = "⏸️ Pause Interview";
+            document.getElementById("btn-pause-session").className = "btn btn-warning";
+            const micBtn = document.getElementById("btn-mic");
+            micBtn.className = "btn-mic-record";
+            micBtn.innerHTML = "🎙️ Tap to Speak (Space)";
+
+            // 8. Reset Decision Flow & Midway Audit
+            cachedTurnsHistory = [];
+            const flowInd = document.getElementById("flow-turn-indicator");
+            if (flowInd) flowInd.textContent = "TURN #0: STANDBY";
+            const cleanBadge = document.getElementById("wf-clean-badge");
+            if (cleanBadge) cleanBadge.textContent = "RAW SPEECH";
+            const inText = document.getElementById("wf-input-text");
+            if (inText) inText.textContent = "Awaiting candidate speech...";
+            const evObs = document.getElementById("wf-eval-obs");
+            if (evObs) { evObs.textContent = "Observation: --"; evObs.className = "badge badge-purple"; }
+            const evSum = document.getElementById("wf-eval-summary");
+            if (evSum) evSum.textContent = "Assessing technical depth, domain abstractions, and trade-off awareness.";
+            const dPct = document.getElementById("wf-depth-percent");
+            if (dPct) dPct.textContent = "--%";
+            const dBar = document.getElementById("wf-depth-bar");
+            if (dBar) dBar.style.width = "0%";
+            const bktDelta = document.getElementById("wf-bkt-delta");
+            if (bktDelta) { bktDelta.textContent = "Δ: +0.0000"; bktDelta.className = "badge badge-green"; }
+            const bktPrior = document.getElementById("wf-bkt-prior");
+            if (bktPrior) bktPrior.textContent = "Prior: 0.350";
+            const bktPost = document.getElementById("wf-bkt-post");
+            if (bktPost) bktPost.textContent = "Post: 0.350";
+            const bktStat = document.getElementById("wf-bkt-status");
+            if (bktStat) bktStat.textContent = "IN_PROGRESS";
+            const fsmAct = document.getElementById("wf-fsm-action");
+            if (fsmAct) fsmAct.textContent = "ACTION: DIAGNOSTIC";
+            const fsmDir = document.getElementById("wf-fsm-directive");
+            if (fsmDir) fsmDir.textContent = "[DIRECTIVE]: System assessing baseline seniority and fundamentals.";
+            const fsmTr = document.getElementById("wf-fsm-transition");
+            if (fsmTr) fsmTr.textContent = "Transition: INITIAL ➔ ACTIVE (Scaffolding L0)";
+
+            const mTotal = document.getElementById("midway-total-turns");
+            if (mTotal) mTotal.textContent = "0";
+            const mBkt = document.getElementById("midway-current-bkt");
+            if (mBkt) mBkt.textContent = "0.35";
+            const mBii = document.getElementById("midway-current-bii");
+            if (mBii) mBii.textContent = "1.00";
+            const mState = document.getElementById("midway-current-state");
+            if (mState) mState.textContent = "ACTIVE";
+            const mCont = document.getElementById("midway-turns-container");
+            if (mCont) {
+                mCont.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); padding: 30px; font-size: 0.8rem;">
+                        Interaction cards will appear here after each turn with full score changes and decisions.
+                    </div>
+                `;
+            }
+        }
+
+        // Start Interview
+        async function startInterview() {
+            initAudio();
+            if (audioCtx && audioCtx.state === "suspended") {
+                await audioCtx.resume();
+            }
+            const micReady = await setupNativeMicrophone();
+            if (!micReady) {
+                showToast("Please allow microphone permissions to begin.", "warning");
+            }
+
+            const name = document.getElementById("candidate-name-input").value.trim() || "Candidate";
+            const level = document.getElementById("interview-level-select").value;
+
+            // Reset all telemetry to initial values for a clean fresh session!
+            resetStudioState(name);
+
+            document.getElementById("btn-start-session").style.display = "none";
+            document.getElementById("btn-pause-session").style.display = "inline-flex";
+            document.getElementById("btn-current-report").style.display = "inline-flex";
+            document.getElementById("btn-end-session").style.display = "inline-flex";
+
+            document.getElementById("btn-mic").disabled = false;
+            document.getElementById("input-box").disabled = false;
+            document.getElementById("btn-send").disabled = false;
+
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${protocol}//${window.location.host}/ws/interview`;
+            ws = new WebSocket(wsUrl);
+            ws.binaryType = "arraybuffer";
+
+            ws.onopen = () => {
+                isSessionActive = true;
+                ws.send(JSON.stringify({ name, level }));
+                setStageStatus("Connecting with Alex...", "connecting");
+                showToast("Connected to Socratic Engine WebSocket!", "success");
+            };
+
+            ws.onmessage = async (event) => {
+                let arrayBuffer = null;
+                if (event.data instanceof ArrayBuffer) {
+                    arrayBuffer = event.data;
+                } else if (event.data instanceof Blob) {
+                    arrayBuffer = await event.data.arrayBuffer();
+                }
+
+                if (arrayBuffer) {
+                    playPCMChunk(arrayBuffer);
+                } else {
+                    const data = JSON.parse(event.data);
+                    handleWsMessage(data);
+                }
+            };
+
+            ws.onclose = () => {
+                isSessionActive = false;
+                setStageStatus("Session Disconnected", "disconnected");
+                document.getElementById("sidebar-live-badge").textContent = "DISCONNECTED";
+            };
+        }
+
+        function handleWsMessage(data) {
+            if (data.event === "session_started") {
+                currentSessionId = data.session_id;
+                sessionStorage.setItem("active_interview_session_id", data.session_id);
+                const telemLink = document.getElementById("nav-link-telemetry");
+                if (telemLink) telemLink.href = `/telemetry?session_id=${data.session_id}`;
+                console.log("[Studio] Session initialized (private to tab):", currentSessionId);
+            } else if (data.event === "ai_turn_start") {
+                alexTurnCompleteReceived = false;
+                isAlexSpeaking = true;
+                if (isRecording) {
+                    stopMicrophone(false, "alex_turn");
+                }
+                startNewAiBubble();
+                setStageStatus("Alex is speaking...", "speaking");
+            } else if (data.event === "ai_transcript_chunk") {
+                if (currentAiMessageBody) {
+                    currentAiMessageBody.textContent += data.text;
+                    const container = document.getElementById("chat-container");
+                    container.scrollTop = container.scrollHeight;
+                }
+            } else if (data.event === "candidate_transcript_chunk") {
+                if (data.text) {
+                    geminiLiveSttAccumulator += data.text;
+                    updateUserLiveText(geminiLiveSttAccumulator);
+                }
+            } else if (data.event === "candidate_interim_transcript") {
+                document.getElementById("interim-stt-bar").innerHTML = `🎙️ <strong style="color:var(--accent-cyan)">Gemini STT:</strong> "${data.text}"`;
+                if (!clientLiveTranscript && data.text) {
+                    updateUserLiveText(data.text);
+                }
+            } else if (data.event === "candidate_transcript") {
+                finalizeUserBubble(data.text);
+                document.getElementById("interim-stt-bar").innerHTML = `✅ <strong style="color:var(--accent-emerald)">Answer Recorded:</strong> "${data.text}"`;
+            } else if (data.event === "turn_complete") {
+                alexTurnCompleteReceived = true;
+                // STAGE 4: Never restart mic on turn_complete alone; wait until playback queue is drained
+                checkAlexPlaybackComplete();
+            } else if (data.event === "ai_interrupted") {
+                // Server confirmed Gemini's output was interrupted — clear local audio queue too
+                interruptAlex();
+            } else if (data.event === "pause_state_changed") {
+                updatePauseStateUI(data.is_paused);
+            } else if (data.event === "session_paused_warning") {
+                showToast(data.message, "warning");
+            } else if (data.event === "telemetry_update") {
+                if (data.telemetry && data.telemetry.session_id) {
+                    currentSessionId = data.telemetry.session_id;
+                }
+                updateLiveTelemetry(data.telemetry, data.active_module);
+            } else if (data.event === "reports_generated") {
+                showReportsGenerated(data.student_report, data.evaluator_report, "Candidate", data.hiring_verdict || "STRONG HIRE");
+            }
+        }
+
+        // Pause & Resume Logic (User Requirement)
+        async function togglePauseSession() {
+            if (!ws) return;
+            const newPausedState = !isPaused;
+            if (newPausedState) {
+                ws.send(JSON.stringify({ event: "pause_interview" }));
+            } else {
+                ws.send(JSON.stringify({ event: "resume_interview" }));
+            }
+        }
+
+        function updatePauseStateUI(paused) {
+            isPaused = paused;
+            document.getElementById("btn-pause-text").textContent = isPaused ? "▶️ Resume Interview" : "⏸️ Pause Interview";
+            document.getElementById("btn-pause-session").className = isPaused ? "btn btn-success" : "btn btn-warning";
+            document.getElementById("paused-banner").classList.toggle("active", isPaused);
+            document.getElementById("topbar-pulse-dot").className = isPaused ? "pulse-dot paused" : "pulse-dot";
+            setStageStatus(isPaused ? "INTERVIEW PAUSED" : "Alex Active", isPaused ? "paused" : "listening");
+            showToast(isPaused ? "Interview conversation paused." : "Interview resumed!", isPaused ? "warning" : "success");
+        }
+
+        // On-Demand Current State Report (User Requirement)
+        async function openCurrentStateReport() {
+            openModal('current-report-modal');
+            const renderArea = document.getElementById('modal-report-rendered');
+            renderArea.innerHTML = '<div style="text-align:center; padding:30px; color:var(--text-muted);">Generating current state intermediate assessment snapshot...</div>';
+
+            try {
+                const sessId = currentSessionId || sessionStorage.getItem('active_interview_session_id');
+                if (!sessId) throw new Error("No active session in this tab. Start an interview first.");
+
+                const data = await apiRequest(`/api/session/${sessId}/intermediate-report`);
+                intermediateReportData = data;
+                document.getElementById('current-report-title').textContent = `Live Intermediate Report: ${data.candidate_name} (${data.turns_count} turns)`;
+                renderModalReport();
+            } catch (e) {
+                renderArea.innerHTML = `<div style="color:var(--accent-rose); padding:20px;">Error generating snapshot: ${e.message}</div>`;
+            }
+        }
+
+        function switchModalReportTab(tab) {
+            modalActiveTab = tab;
+            document.getElementById('modal-tab-student').classList.toggle('active', tab === 'student');
+            document.getElementById('modal-tab-evaluator').classList.toggle('active', tab === 'evaluator');
+            const wfBtn = document.getElementById('modal-tab-workflow');
+            if (wfBtn) wfBtn.classList.toggle('active', tab === 'workflow');
+            renderModalReport();
+        }
+
+        function renderModalReport() {
+            if (!intermediateReportData) return;
+            const area = document.getElementById('modal-report-rendered');
+            if (modalActiveTab === 'workflow') {
+                renderWorkflowHistory(area);
+                return;
+            }
+            const md = (modalActiveTab === 'student') ? intermediateReportData.student_report : intermediateReportData.evaluator_report;
+            area.innerHTML = marked.parse(md || "No report content generated yet.");
+        }
+
+        function renderWorkflowHistory(area) {
+            const turns = (intermediateReportData && intermediateReportData.turns_history && intermediateReportData.turns_history.length > 0)
+                ? intermediateReportData.turns_history
+                : cachedTurnsHistory;
+
+            if (!turns || turns.length === 0) {
+                area.innerHTML = `
+                    <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+                        <div style="font-size: 2.2rem; margin-bottom: 12px;">📊</div>
+                        <strong style="color: var(--text-primary); font-size: 1.1rem;">No Interactive Turns Logged Yet</strong><br>
+                        <span style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px; display: inline-block;">
+                            Complete at least one candidate voice turn to view the mathematical BKT posterior shifts, evaluator rubrics, and FSM decisions.
+                        </span>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Turn-by-Turn Socratic Decision & Score Flow</h3>
+                            <span style="font-size: 0.78rem; color: var(--text-secondary);">Forensic log of Bayesian Knowledge Tracing updates, MIRT ability shifts, and adaptive pedagogy</span>
+                        </div>
+                        <span class="badge badge-purple" style="font-size: 0.8rem; padding: 4px 10px;">
+                            ${turns.length} Turn${turns.length > 1 ? 's' : ''} Analyzed
+                        </span>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+            `;
+
+            turns.forEach((t, i) => {
+                const turnNum = t.turn_index || (i + 1);
+                const skill = t.skill || t.topic || 'TECHNICAL_SKILL';
+                const input = t.candidate_input || t.candidate_answer || t.candidate_transcript || '';
+                const latency = t.latency_ms || 0;
+                
+                // Evaluator data
+                const ev = t.evaluator || {};
+                const isPass = (ev.observation === 1 || t.evaluator_observation === 1);
+                const depthVal = ev.depth_score !== undefined ? ev.depth_score : (t.depth_score !== undefined ? t.depth_score : 0.5);
+                const depthPct = Math.round(depthVal * 100);
+                const summary = ev.summary || 'Technical evaluation against benchmark rubric.';
+
+                // BKT data
+                const bkt = t.bkt || {};
+                const prior = bkt.prior !== undefined ? bkt.prior : (t.bkt_prior !== undefined ? t.bkt_prior : 0.35);
+                const post = bkt.posterior !== undefined ? bkt.posterior : (t.bkt_posterior !== undefined ? t.bkt_posterior : 0.35);
+                const delta = bkt.delta !== undefined ? bkt.delta : (post - prior);
+                const deltaStr = (delta >= 0 ? '+' : '') + Number(delta).toFixed(4);
+
+                // Policy data
+                const pol = t.policy || {};
+                const action = pol.next_action || 'DIAGNOSTIC';
+                const directive = pol.prompt_directive || 'Standard Socratic exploration probe.';
+                const scaffold = pol.scaffolding_level !== undefined ? `L${pol.scaffolding_level}` : 'L0';
+
+                html += `
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px 16px; border-left: 4px solid ${isPass ? 'var(--accent-emerald)' : 'var(--accent-amber)'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <strong style="color: var(--accent-cyan); font-size: 0.92rem;">Turn #${turnNum}</strong>
+                                <span class="badge badge-purple" style="font-size: 0.7rem;">${skill}</span>
+                                ${t.timestamp ? `<span style="font-size: 0.7rem; color: var(--text-muted); font-family: 'JetBrains Mono';">${t.timestamp}</span>` : ''}
+                            </div>
+                            <div style="display: flex; gap: 6px; align-items: center;">
+                                <span class="badge ${isPass ? 'badge-green' : 'badge-amber'}" style="font-size: 0.72rem;">
+                                    ${isPass ? 'PASSED (1)' : 'STRUGGLING (0)'}
+                                </span>
+                                <span class="badge badge-cyan" style="font-size: 0.72rem;">${latency} ms</span>
+                            </div>
+                        </div>
+
+                        <!-- Candidate Utterance -->
+                        <div style="background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-size: 0.8rem; color: #cbd5e1; font-style: italic; border-left: 2px solid var(--border-light);">
+                            <span style="font-weight: 700; color: var(--accent-cyan); font-style: normal;">Candidate Answer: </span>
+                            "${input}"
+                        </div>
+
+                        <!-- 3-Column Decision Grid -->
+                        <div style="display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 10px; margin-bottom: 8px;">
+                            <!-- Column 1: Evaluator Assessment -->
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px;">
+                                <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">1. SHADOW EVALUATOR</div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                                    <span>Depth Score:</span>
+                                    <strong style="color: var(--accent-cyan);">${depthPct}%</strong>
+                                </div>
+                                <div style="background: rgba(255,255,255,0.08); height: 5px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                                    <div style="background: ${depthPct >= 70 ? 'var(--accent-emerald)' : 'var(--accent-cyan)'}; height: 100%; width: ${depthPct}%;"></div>
+                                </div>
+                                <div style="font-size: 0.72rem; color: #94a3b8; line-height: 1.35;">${summary}</div>
+                            </div>
+
+                            <!-- Column 2: BKT Bayesian Update -->
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px;">
+                                <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">2. BAYESIAN POSTERIOR SHIFT</div>
+                                <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono'; font-size: 0.75rem; margin-bottom: 4px;">
+                                    <span style="color: #94a3b8;">${Number(prior).toFixed(3)}</span>
+                                    <span style="color: var(--accent-cyan);">➔</span>
+                                    <strong style="color: var(--accent-emerald);">${Number(post).toFixed(3)}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.72rem; font-family: 'JetBrains Mono';">
+                                    <span style="color: var(--text-muted);">Score Shift (Δ):</span>
+                                    <strong style="color: ${delta >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${deltaStr}</strong>
+                                </div>
+                                <div style="font-size: 0.68rem; color: var(--text-muted); margin-top: 6px;">
+                                    Status: <span class="badge ${post >= 0.8 ? 'badge-green' : 'badge-amber'}" style="font-size: 0.62rem;">${post >= 0.8 ? 'MASTERED' : 'IN_PROGRESS'}</span>
+                                </div>
+                            </div>
+
+                            <!-- Column 3: FSM Adaptive Decision -->
+                            <div style="background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px;">
+                                <div style="font-size: 0.68rem; font-weight: 700; color: var(--text-muted); margin-bottom: 4px;">3. POLICY FSM DIRECTIVE</div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                                    <span style="color: var(--text-muted);">Intervention:</span>
+                                    <strong style="color: #fde68a;">${action}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 0.72rem; margin-bottom: 4px;">
+                                    <span style="color: var(--text-muted);">Scaffolding:</span>
+                                    <span class="badge badge-purple" style="font-size: 0.65rem;">${scaffold}</span>
+                                </div>
+                                <div style="font-size: 0.7rem; color: #fde68a; line-height: 1.35; margin-top: 4px; font-style: italic;">
+                                    "${directive}"
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+            area.innerHTML = html;
+        }
+
+        function resumeFromModal() {
+            closeModal('current-report-modal');
+            if (isPaused) {
+                togglePauseSession();
+            }
+        }
+
+        // Finish Interview & Archive Dual Reports to PostgreSQL
+        async function finishInterview() {
+            showToast("Generating final assessment reports & archiving to PostgreSQL...", "info");
+            setStageStatus("Generating reports...", "connecting");
+
+            openModal('current-report-modal');
+            document.getElementById('current-report-title').textContent = "Compiling Final Assessment Reports...";
+            document.getElementById('modal-report-rendered').innerHTML = `
+                <div style="text-align:center; padding:40px; color:var(--text-muted);">
+                    <div style="font-size:2.2rem; margin-bottom:12px;">⏳</div>
+                    <strong style="color:var(--text-primary); font-size:1.1rem;">Archiving Assessment to PostgreSQL...</strong><br>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); margin-top:6px; display:inline-block;">
+                        Synthesizing Candidate Career Compass, Evaluator Forensic Audit, BKT skills, and MIRT vectors into database.
+                    </span>
+                </div>
+            `;
+
+            // 1. Notify WebSocket if open
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify({ event: "finish_interview" }));
+                } catch (e) {
+                    console.warn("[Finish WS Send Warn]", e);
+                }
+            }
+
+            // 2. Resilient REST API fallback/call
+            try {
+                let sessId = currentSessionId || sessionStorage.getItem('active_interview_session_id');
+
+                if (sessId) {
+                    const finishRes = await fetch(`/api/session/${sessId}/finish`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" }
+                    });
+                    const data = await finishRes.json();
+                    if (data.status === "success") {
+                        showReportsGenerated(data.student_report, data.evaluator_report, data.candidate_name, data.hiring_verdict);
+                        showToast("Reports successfully saved to PostgreSQL database!", "success");
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.warn("[Finish REST Err]", err);
+            }
+        }
+
+        function showReportsGenerated(studentRep, evalRep, candidateName = "Candidate", hiringVerdict = "STRONG HIRE") {
+            intermediateReportData = { student_report: studentRep, evaluator_report: evalRep, candidate_name: candidateName, turns_count: "Complete" };
+            openModal('current-report-modal');
+            document.getElementById('current-report-title').textContent = `Final Candidate Assessment Report — Verdict: ${hiringVerdict} (Archived in PostgreSQL)`;
+            renderModalReport();
+        }
+
+        // Chat UI Helpers (Bidirectional Real-Time Conversation)
+        function startNewAiBubble() {
+            if (currentUserBubble) {
+                finalizeUserBubble();
+            }
+            const chat = document.getElementById("chat-container");
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble ai";
+
+            const header = document.createElement("div");
+            header.className = "bubble-header ai";
+            header.innerHTML = `<span>🤖 Alex (Principal Engineer)</span><span>${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>`;
+
+            currentAiMessageBody = document.createElement("div");
+            currentAiMessageBody.className = "bubble-body";
+
+            bubble.appendChild(header);
+            bubble.appendChild(currentAiMessageBody);
+            chat.appendChild(bubble);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function startNewUserBubble(initialText = "") {
+            if (currentUserBubble) {
+                if (initialText && currentUserMessageBody) {
+                    currentUserMessageBody.textContent = initialText;
+                }
+                return;
+            }
+            const chat = document.getElementById("chat-container");
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble user live-recording";
+            bubble.id = "active-candidate-bubble";
+
+            const header = document.createElement("div");
+            header.className = "bubble-header user";
+            header.innerHTML = `<span>👤 You (Candidate)</span><span class="user-live-indicator" style="color:var(--accent-cyan); font-weight:600; font-size:0.75rem;">🎙️ Speaking...</span>`;
+
+            currentUserMessageBody = document.createElement("div");
+            currentUserMessageBody.className = "bubble-body";
+            currentUserMessageBody.textContent = initialText || "Listening to your voice...";
+
+            bubble.appendChild(header);
+            bubble.appendChild(currentUserMessageBody);
+            chat.appendChild(bubble);
+            chat.scrollTop = chat.scrollHeight;
+            currentUserBubble = bubble;
+        }
+
+        function updateUserLiveText(text) {
+            if (!text || !text.trim()) return;
+            const cleanText = text.trim();
+            if (!currentUserBubble) {
+                startNewUserBubble(cleanText);
+            } else if (currentUserMessageBody) {
+                currentUserMessageBody.textContent = cleanText;
+                const container = document.getElementById("chat-container");
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function finalizeUserBubble(finalText = "") {
+            const chat = document.getElementById("chat-container");
+            if (!currentUserBubble) {
+                // If there is an existing candidate bubble at the bottom of the conversation, update it rather than duplicating
+                const userBubbles = chat.querySelectorAll(".message-bubble.user");
+                const lastUserBubble = userBubbles.length > 0 ? userBubbles[userBubbles.length - 1] : null;
+                if (lastUserBubble && finalText && finalText.trim()) {
+                    let hasAiAfter = false;
+                    let sib = lastUserBubble.nextElementSibling;
+                    while (sib) {
+                        if (sib.classList.contains("ai")) {
+                            hasAiAfter = true;
+                            break;
+                        }
+                        sib = sib.nextElementSibling;
+                    }
+                    if (!hasAiAfter) {
+                        const body = lastUserBubble.querySelector(".bubble-body");
+                        if (body) {
+                            body.textContent = finalText.trim();
+                            chat.scrollTop = chat.scrollHeight;
+                            return lastUserBubble;
+                        }
+                    }
+                }
+                if (finalText && finalText.trim()) {
+                    return appendUserMessage(finalText.trim());
+                }
+                return null;
+            }
+            currentUserBubble.classList.remove("live-recording");
+            const ind = currentUserBubble.querySelector(".user-live-indicator");
+            if (ind) {
+                ind.remove();
+            }
+            const header = currentUserBubble.querySelector(".bubble-header.user");
+            if (header && !header.querySelector(".bubble-time")) {
+                const timeSpan = document.createElement("span");
+                timeSpan.className = "bubble-time";
+                timeSpan.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                header.appendChild(timeSpan);
+            }
+            if (finalText && finalText.trim() && currentUserMessageBody) {
+                currentUserMessageBody.textContent = finalText.trim();
+            } else if (currentUserMessageBody && currentUserMessageBody.textContent === "Listening to your voice...") {
+                currentUserBubble.remove();
+                currentUserBubble = null;
+                currentUserMessageBody = null;
+                return null;
+            }
+            const finalized = currentUserBubble;
+            currentUserBubble = null;
+            currentUserMessageBody = null;
+            geminiLiveSttAccumulator = "";
+            chat.scrollTop = chat.scrollHeight;
+            return finalized;
+        }
+
+        function appendUserMessage(text) {
+            if (currentUserBubble) {
+                return finalizeUserBubble(text);
+            }
+            const chat = document.getElementById("chat-container");
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble user";
+            bubble.innerHTML = `
+                <div class="bubble-header user">
+                    <span>👤 You (Candidate)</span>
+                    <span class="bubble-time">${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                </div>
+                <div class="bubble-body">${text}</div>
+            `;
+            chat.appendChild(bubble);
+            chat.scrollTop = chat.scrollHeight;
+            return bubble;
+        }
+
+        function appendAiMessage(text) {
+            const chat = document.getElementById("chat-container");
+            const bubble = document.createElement("div");
+            bubble.className = "message-bubble ai";
+            bubble.innerHTML = `
+                <div class="bubble-header ai">
+                    <span>🤖 Alex (Principal Engineer)</span>
+                    <span class="bubble-time">${new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                </div>
+                <div class="bubble-body">${text}</div>
+            `;
+            chat.appendChild(bubble);
+            chat.scrollTop = chat.scrollHeight;
+            return bubble;
+        }
+
+        function sendManualText() {
+            const input = document.getElementById("input-box");
+            const text = input.value.trim();
+            if (!text || !ws) return;
+            if (isPaused) {
+                showToast("Interview is paused. Click Resume to speak.", "warning");
+                return;
+            }
+            finalizeUserBubble(text);
+            ws.send(JSON.stringify({ text }));
+            input.value = "";
+        }
+
+        document.getElementById("input-box").addEventListener("keydown", (e) => {
+            if (e.key === "Enter") sendManualText();
+        });
+
+        // --- Native Microphone Management & Linear 16kHz Resampling ---
+        function resampleTo16k(inputData, inputSampleRate) {
+            if (inputSampleRate === 16000) return inputData;
+            const ratio = inputSampleRate / 16000;
+            const newLength = Math.round(inputData.length / ratio);
+            const result = new Float32Array(newLength);
+            for (let i = 0; i < newLength; i++) {
+                const originIndex = i * ratio;
+                const indexPrev = Math.floor(originIndex);
+                const indexNext = Math.min(indexPrev + 1, inputData.length - 1);
+                const fraction = originIndex - indexPrev;
+                result[i] = inputData[indexPrev] * (1 - fraction) + inputData[indexNext] * fraction;
+            }
+            return result;
+        }
+
+        function getSilenceTimeout() {
+            const paceSelect = document.getElementById("speaking-pace-select");
+            const val = paceSelect ? paceSelect.value : "4000";
+            if (val === "manual") return -1;
+            return parseInt(val, 10) || 4000;
+        }
+
+        // --- STAGE 1: AudioWorklet-driven Two-Stage VAD & Safety Cap ---
+        let t1Timer = null;
+        let t2Timer = null;
+        let hardCapTimer = null;
+        let hasSpokenInCurrentTurn = false;
+        let speechStreakFrames = 0;
+        let isT1Active = false;
+        let micWorkletActiveResolver = null;
+
+        // Stage 2: Adaptive Noise Floor & RMS Speech Threshold
+        let noiseFloorRms = 0.003;
+        let adaptiveSpeechThreshold = 0.008;
+        let noiseFloorCalibrationSamples = [];
+        let isCalibratingNoiseFloor = true;
+        let calibrationStartTime = Date.now();
+
+        function handleAdaptiveNoiseCalibration(rms) {
+            if (!isCalibratingNoiseFloor) return;
+            const elapsed = Date.now() - calibrationStartTime;
+            if (elapsed < 2000) {
+                noiseFloorCalibrationSamples.push(rms);
+            } else if (noiseFloorCalibrationSamples.length > 0) {
+                isCalibratingNoiseFloor = false;
+                const sum = noiseFloorCalibrationSamples.reduce((a, b) => a + b, 0);
+                noiseFloorRms = sum / noiseFloorCalibrationSamples.length;
+                adaptiveSpeechThreshold = Math.max(0.006, Math.min(0.035, noiseFloorRms * 2.5));
+                console.log(`[AutoVAD] Noise floor calibrated: Floor=${noiseFloorRms.toFixed(5)}, Threshold=${adaptiveSpeechThreshold.toFixed(5)}`);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        event: "vad_calibration",
+                        floor: noiseFloorRms,
+                        threshold: adaptiveSpeechThreshold
+                    }));
+                }
+            }
+        }
+
+        function handleAudioChunkVAD(rms, isSpeech) {
+            if (!isRecording || isPaused || isAlexSpeaking) return;
+
+            const speechDetected = isSpeech || (rms >= adaptiveSpeechThreshold);
+            if (speechDetected) {
+                speechStreakFrames++;
+                if (speechStreakFrames >= 2) { // ~160ms of continuous sound
+                    hasSpokenInCurrentTurn = true;
+                    if (!currentUserBubble && isRecording && !isAlexSpeaking) {
+                        startNewUserBubble();
+                    }
+                    // Reset silence timers on actual speech
+                    if (t1Timer) { clearTimeout(t1Timer); t1Timer = null; }
+                    if (t2Timer) { clearTimeout(t2Timer); t2Timer = null; }
+                    if (isT1Active) {
+                        isT1Active = false;
+                        setStageStatus("Candidate Speaking (Listening...)", "listening");
+                        const bar = document.getElementById("interim-stt-bar");
+                        if (bar && clientLiveTranscript) {
+                            bar.innerHTML = `🎙️ <strong style="color:var(--accent-cyan)">Live Words:</strong> "${clientLiveTranscript}"`;
+                        }
+                    }
+                }
+            } else {
+                speechStreakFrames = 0;
+                // If speech has occurred in this turn, arm T1 and T2 silence timers if not already armed
+                if (hasSpokenInCurrentTurn && !t1Timer && !t2Timer) {
+                    const t2Ms = getSilenceTimeout();
+                    if (t2Ms > 0) {
+                        const t1Ms = Math.min(1800, Math.round(t2Ms * 0.45));
+                        t1Timer = setTimeout(() => {
+                            if (isRecording && !isPaused && !isAlexSpeaking) {
+                                isT1Active = true;
+                                setStageStatus("Still listening...", "listening");
+                                const bar = document.getElementById("interim-stt-bar");
+                                if (bar) {
+                                    bar.innerHTML = `🎙️ <strong style="color:var(--accent-amber)">Still listening...</strong> Take your time. (Tap Space to submit immediately)`;
+                                }
+                            }
+                        }, t1Ms);
+
+                        t2Timer = setTimeout(() => {
+                            if (isRecording && !isPaused && !isAlexSpeaking) {
+                                console.log(`[AutoVAD] T2 silence timeout (${t2Ms}ms) reached. Submitting candidate turn...`);
+                                stopMicrophone(true, "timer_T2");
+                            }
+                        }, t2Ms);
+                    }
+                }
+            }
+        }
+
+        function setupSpeechRecognition() {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) {
+                console.warn("[SpeechRec] Web Speech API not supported in this browser.");
+                return;
+            }
+            try {
+                speechRec = new SpeechRec();
+                speechRec.continuous = true;
+                speechRec.interimResults = true;
+                speechRec.lang = "en-IN"; // English (India) to preserve accent accuracy
+
+                // Web Speech API is display-only (live preview). It does NOT trigger silence submission.
+                speechRec.onresult = (event) => {
+                    let interim = "";
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        if (event.results[i].isFinal) {
+                            finalSpeechAccumulator += event.results[i][0].transcript + " ";
+                        } else {
+                            interim += event.results[i][0].transcript;
+                        }
+                    }
+                    clientLiveTranscript = (finalSpeechAccumulator + interim).trim();
+                    if (clientLiveTranscript && isRecording) {
+                        document.getElementById("interim-stt-bar").innerHTML = 
+                            `🎙️ <strong style="color:var(--accent-cyan)">Live Words:</strong> "${clientLiveTranscript}"`;
+                        updateUserLiveText(clientLiveTranscript);
+                    }
+                };
+
+                speechRec.onend = () => {
+                    if (isRecording && !isPaused && isSessionActive) {
+                        console.log("[Watchdog] SpeechRecognition auto-restarting to keep listening...");
+                        try { speechRec.start(); } catch (e) {}
+                    }
+                };
+
+                speechRec.onerror = (e) => {
+                    console.warn("[SpeechRec Warning]", e.error);
+                    if (isRecording && !isPaused && e.error !== 'aborted') {
+                        try { speechRec.start(); } catch (err) {}
+                    }
+                };
+            } catch (err) {
+                console.warn("[SpeechRec Init Error]", err);
+            }
+        }
+
+        async function setupNativeMicrophone() {
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        channelCount: 1,
+                        sampleRate: { ideal: 16000 }
+                    }
+                });
+
+                micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log(`[Audio] Mic context at ${micAudioCtx.sampleRate} Hz`);
+                const micSource = micAudioCtx.createMediaStreamSource(mediaStream);
+
+                // Visualiser analyser
+                micAnalyser = micAudioCtx.createAnalyser();
+                micAnalyser.fftSize = 256;
+                micAnalyser.smoothingTimeConstant = 0.5;
+                micSource.connect(micAnalyser);
+                micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+                // ── AudioWorklet (primary path) ──
+                try {
+                    await micAudioCtx.audioWorklet.addModule('/static/js/audio_worklet_processor.js');
+                    micWorkletNode = new AudioWorkletNode(micAudioCtx, 'mic-capture-16khz');
+                    micWorkletNode.port.onmessage = (e) => {
+                        if (e.data.type === 'pcm_chunk') {
+                            if (ws && ws.readyState === WebSocket.OPEN && (isRecording || e.data.is_prebuffer)) {
+                                ws.send(e.data.buffer);
+                            }
+                            if (isRecording && !isPaused && !isAlexSpeaking) {
+                                handleAudioChunkVAD(e.data.rms, e.data.is_speech);
+                            }
+                        } else if (e.data.type === 'active_confirmed') {
+                            if (micWorkletActiveResolver) {
+                                micWorkletActiveResolver();
+                                micWorkletActiveResolver = null;
+                            }
+                        } else if (e.data.type === 'vad_rms') {
+                            // Update VAD energy indicator
+                            const rms = e.data.rms;
+                            handleAdaptiveNoiseCalibration(rms);
+                            const energy = Math.min(1.0, rms * 8);
+                            const bar = document.getElementById('interim-stt-bar');
+                            if (bar && isRecording && rms > 0.005) {
+                                bar.style.borderLeftColor = `hsl(${140 - energy * 100}, 80%, 55%)`;
+                            }
+                        }
+                    };
+                    micSource.connect(micWorkletNode);
+                    micWorkletNode.connect(micAudioCtx.destination); // required to keep node alive
+                    micWorkletNode.port.postMessage({ type: 'set_active', value: false }); // muted by default (ring-buffering)
+                    micWorkletReady = true;
+                    console.log('[Audio] AudioWorklet loaded successfully.');
+                } catch (workletErr) {
+                    // Fallback to deprecated ScriptProcessorNode
+                    console.warn('[Audio] AudioWorklet failed, falling back to ScriptProcessor:', workletErr);
+                    micWorkletReady = false;
+                    micProcessor = micAudioCtx.createScriptProcessor(4096, 1, 1);
+                    micProcessor.onaudioprocess = (e) => {
+                        if (!isRecording || !isStreaming || !ws || ws.readyState !== WebSocket.OPEN) return;
+                        const float32 = e.inputBuffer.getChannelData(0);
+                        const resampled = resampleTo16k(float32, micAudioCtx.sampleRate);
+                        let sumSq = 0;
+                        for (let i = 0; i < resampled.length; i++) sumSq += resampled[i] * resampled[i];
+                        const rms = Math.sqrt(sumSq / resampled.length);
+                        const isSpeech = rms >= 0.008;
+
+                        const int16 = new Int16Array(resampled.length);
+                        for (let i = 0; i < resampled.length; i++) {
+                            int16[i] = Math.max(-32768, Math.min(32767, Math.round(resampled[i] * 32767)));
+                        }
+                        ws.send(int16.buffer);
+                        if (isRecording && !isPaused && !isAlexSpeaking) {
+                            handleAudioChunkVAD(rms, isSpeech);
+                        }
+                    };
+                    micSource.connect(micProcessor);
+                    const zeroGain = micAudioCtx.createGain();
+                    zeroGain.gain.value = 0;
+                    micProcessor.connect(zeroGain);
+                    zeroGain.connect(micAudioCtx.destination);
+                }
+
+                setupSpeechRecognition();
+                return true;
+            } catch (err) {
+                console.error("Microphone setup error:", err);
+                showToast("Microphone permission required: " + err.message, "error");
+                return false;
+            }
+        }
+
+        // --- Microphone Control (Hands-Free Auto & Push-to-Talk) ---
+        function toggleMicrophone() {
+            if (isPaused) {
+                showToast("Cannot record while conversation is paused.", "warning");
+                return;
+            }
+            if (isAlexSpeaking) {
+                interruptAlex();
+                return;
+            }
+            if (isRecording) {
+                stopMicrophone(true, "manual");
+            } else {
+                startMicrophone();
+            }
+        }
+
+        async function startMicrophone() {
+            if (isRecording || isPaused || !isSessionActive) return;
+            if (!mediaStream) {
+                const ok = await setupNativeMicrophone();
+                if (!ok) return;
+            }
+
+            // Ensure AudioContext is running
+            if (micAudioCtx && micAudioCtx.state === 'suspended') {
+                try { await micAudioCtx.resume(); } catch (e) {}
+            }
+
+            // Signal backend that mic stream is live
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ event: 'mic_start' }));
+            }
+
+            // Activate AudioWorklet and await confirmation before showing Listening
+            if (micWorkletReady && micWorkletNode) {
+                const workletWait = new Promise((resolve) => {
+                    micWorkletActiveResolver = resolve;
+                    micWorkletNode.port.postMessage({ type: 'set_active', value: true });
+                    setTimeout(resolve, 150); // fallback timeout
+                });
+                await workletWait;
+            }
+
+            isRecording = true;
+            isStreaming = true;
+            finalSpeechAccumulator = "";
+            clientLiveTranscript = "";
+
+            // Clear all VAD and safety timers for this fresh turn
+            if (t1Timer) { clearTimeout(t1Timer); t1Timer = null; }
+            if (t2Timer) { clearTimeout(t2Timer); t2Timer = null; }
+            if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
+            clearTimeout(silenceTimer);
+            hasSpokenInCurrentTurn = false;
+            speechStreakFrames = 0;
+            isT1Active = false;
+
+            // Hard safety cap: submits turn after 180s without discarding audio
+            hardCapTimer = setTimeout(() => {
+                if (isRecording && !isPaused && !isAlexSpeaking) {
+                    console.warn("[AutoVAD] 180s hard safety cap reached. Submitting candidate turn...");
+                    stopMicrophone(true, "hard_cap");
+                }
+            }, 180000);
+
+            const micBtn = document.getElementById("btn-mic");
+            micBtn.className = "btn-mic-record recording";
+            micBtn.innerHTML = "🛑 Done Speaking (Tap / Space)";
+            setStageStatus("Candidate Speaking (Listening...)", "listening");
+
+            const paceVal = document.getElementById("speaking-pace-select") ? document.getElementById("speaking-pace-select").value : "4000";
+            const paceLabel = paceVal === "manual" ? "Manual Mode (Tap Space when done)" : `Pause tolerance: ${parseInt(paceVal)/1000}s`;
+            document.getElementById("interim-stt-bar").innerHTML = 
+                `🎙️ <strong style="color:var(--accent-cyan)">Listening...</strong> Speak comfortably (${paceLabel}). Tap <strong>Done Speaking (Space)</strong> when finished.`;
+
+            if (speechRec) {
+                try { speechRec.start(); } catch (e) {
+                    console.log("[SpeechRec Start Warn]", e);
+                }
+            }
+        }
+
+        function stopMicrophone(submit = true, reason = "manual") {
+            if (!isRecording) return;
+            isRecording = false;
+            isStreaming = false;
+
+            // Clear all VAD and safety timers
+            if (t1Timer) { clearTimeout(t1Timer); t1Timer = null; }
+            if (t2Timer) { clearTimeout(t2Timer); t2Timer = null; }
+            if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null; }
+            clearTimeout(silenceTimer);
+            hasSpokenInCurrentTurn = false;
+            speechStreakFrames = 0;
+            isT1Active = false;
+
+            // Mute the AudioWorklet
+            if (micWorkletReady && micWorkletNode) {
+                micWorkletNode.port.postMessage({ type: 'set_active', value: false });
+            }
+
+            if (speechRec) {
+                try { speechRec.stop(); } catch (e) {}
+            }
+
+            const micBtn = document.getElementById("btn-mic");
+            micBtn.className = "btn-mic-record";
+            micBtn.innerHTML = "🎙️ Tap to Speak (Space)";
+
+            // Signal backend mic stream paused with explicit reason
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ event: 'mic_stop', reason: reason }));
+            }
+
+            if (!submit) {
+                return;
+            }
+
+            // Clean submission without doubling finalSpeechAccumulator
+            let submittedTranscript = clientLiveTranscript.trim();
+            if (!submittedTranscript && finalSpeechAccumulator.trim()) {
+                submittedTranscript = finalSpeechAccumulator.trim();
+            }
+
+            // Deduplicate repeated sentences if any
+            const words = submittedTranscript.split(/\s+/);
+            if (words.length >= 6) {
+                const half = Math.floor(words.length / 2);
+                if (words.slice(0, half).join(" ").toLowerCase() === words.slice(half, half * 2).join(" ").toLowerCase()) {
+                    submittedTranscript = words.slice(0, half).join(" ");
+                }
+            }
+
+            if (submittedTranscript) {
+                updateUserLiveText(submittedTranscript);
+                finalizeUserBubble(submittedTranscript);
+                document.getElementById("interim-stt-bar").innerHTML = 
+                    `⚡ <strong style="color:var(--accent-purple)">Transcribed:</strong> "${submittedTranscript}" — Submitting to Alex...`;
+                setStageStatus("Alex evaluating answer...", "connecting");
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        event: "end_of_speech",
+                        transcript: submittedTranscript
+                    }));
+                }
+            } else {
+                if (currentUserBubble && currentUserMessageBody && currentUserMessageBody.textContent !== "Listening to your voice...") {
+                    finalizeUserBubble(currentUserMessageBody.textContent);
+                }
+                document.getElementById("interim-stt-bar").innerHTML = 
+                    `⚡ <strong style="color:var(--accent-purple)">Audio submitted:</strong> Awaiting Gemini transcription...`;
+                setStageStatus("Alex evaluating answer...", "connecting");
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        event: "end_of_speech",
+                        transcript: ""
+                    }));
+                }
+            }
+        }
+
+        // Keyboard Spacebar trigger
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA" && isSessionActive) {
+                e.preventDefault();
+                toggleMicrophone();
+            }
+        });
+
+        // --- Audio Output Engine (Alex Voice Streaming) ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 128;
+                analyser.smoothingTimeConstant = 0.82;
+                analyser.connect(audioCtx.destination);
+                freqData = new Uint8Array(analyser.frequencyBinCount);
+            }
+            if (audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+        }
+
+        function playPCMChunk(arrayBuffer) {
+            initAudio();
+            if (audioCtx && audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+            isAlexSpeaking = true;
+            document.getElementById("btn-interrupt").style.display = "inline-flex";
+            setStageStatus("Alex is speaking...", "speaking");
+
+            // Handle odd byte length cleanly
+            const alignedLength = arrayBuffer.byteLength - (arrayBuffer.byteLength % 2);
+            if (alignedLength === 0) return;
+
+            const pcmData = new Int16Array(arrayBuffer, 0, alignedLength / 2);
+            const floatData = new Float32Array(pcmData.length);
+            for (let i = 0; i < pcmData.length; i++) {
+                floatData[i] = pcmData[i] / 32768.0;
+            }
+
+            const buffer = audioCtx.createBuffer(1, floatData.length, 24000);
+            buffer.getChannelData(0).set(floatData);
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(analyser);
+            source.connect(audioCtx.destination); // Guaranteed direct route to audio hardware speakers!
+
+            const currentTime = audioCtx.currentTime;
+            if (nextPlayTime < currentTime) nextPlayTime = currentTime;
+            source.start(nextPlayTime);
+            nextPlayTime += buffer.duration;
+
+            activeAudioSources.push(source);
+            source.onended = () => {
+                activeAudioSources = activeAudioSources.filter(s => s !== source);
+                checkAlexPlaybackComplete();
+            };
+        }
+
+        // --- STAGE 4: Mic Restart Only After Full Playback Drain ---
+        function checkAlexPlaybackComplete() {
+            if (!alexTurnCompleteReceived) return;
+            if (activeAudioSources.length > 0) return;
+
+            // Ensure AudioContext time has passed the end of the last scheduled audio chunk
+            if (audioCtx && audioCtx.currentTime < (nextPlayTime - 0.05)) {
+                const remainingSec = Math.max(0.01, nextPlayTime - audioCtx.currentTime);
+                setTimeout(() => {
+                    checkAlexPlaybackComplete();
+                }, Math.ceil(remainingSec * 1000));
+                return;
+            }
+
+            // Both conditions met: turn_complete received AND playback queue fully drained
+            if (isAlexSpeaking) {
+                isAlexSpeaking = false;
+                document.getElementById("btn-interrupt").style.display = "none";
+                setStageStatus("Alex finished — Speak now (or press Space)", "listening");
+                document.getElementById("interim-stt-bar").innerHTML = 
+                    `🎙️ <strong style="color:var(--accent-emerald)">Alex finished:</strong> Listening for your answer... Start speaking (or press Space)!`;
+
+                // Hands-free auto-listen: activate mic only after playback is fully drained
+                if (!isPaused && isSessionActive) {
+                    startMicrophone();
+                }
+            }
+        }
+
+        function interruptAlex() {
+            // Immediately stop all queued audio playback
+            activeAudioSources.forEach(s => { try { s.stop(); } catch (e) {} });
+            activeAudioSources = [];
+            // Reset nextPlayTime to NOW so next chunk plays immediately with no gap
+            if (audioCtx) nextPlayTime = audioCtx.currentTime;
+            isAlexSpeaking = false;
+            alexTurnCompleteReceived = true;
+            document.getElementById("btn-interrupt").style.display = "none";
+            setStageStatus("Interrupted Alex.", "listening");
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ event: "interrupt" }));
+            }
+            startMicrophone();
+        }
+
+        // Telemetry Update Handler
+        function updateLiveTelemetry(t, module) {
+            if (!t) return;
+            document.getElementById("active-pillar-badge").textContent = `Topic: ${t.current_skill || 'GENERAL'}`;
+            document.getElementById("trace-latency-badge").textContent = `Latency: ${t.latency_ms || 0} ms`;
+
+            if (t.bkt_mastery !== undefined) {
+                document.getElementById("trace-bkt-calc").textContent = `Effective Mastery P(L): ${t.bkt_mastery}`;
+                document.getElementById("pane-math-pl").textContent = Number(t.bkt_mastery).toFixed(4);
+            }
+
+            if (t.scaffolding_level !== undefined) {
+                document.getElementById("pane-math-scaffold").textContent = `L${t.scaffolding_level}`;
+            }
+
+            if (t.latest_rubric) {
+                const r = t.latest_rubric;
+                document.getElementById("trace-obs-badge").textContent = `Obs: ${r.observation === 1 ? '1 (PASS)' : '0 (GAP)'}`;
+                document.getElementById("trace-shadow-summary").textContent = r.summary || '--';
+                document.getElementById("rubric-depth-badge").textContent = `Depth: ${Math.round((r.depth_score || 0.5) * 100)}%`;
+                document.getElementById("rubric-active-topic").textContent = `TOPIC: ${t.current_skill}`;
+                document.getElementById("rubric-raw-json").textContent = JSON.stringify(r, null, 2);
+
+                const itemsBox = document.getElementById("rubric-items-container");
+                if (r.rubric_items && r.rubric_items.length > 0) {
+                    itemsBox.innerHTML = '';
+                    r.rubric_items.forEach(item => {
+                        const d = document.createElement('div');
+                        d.style.background = 'var(--bg-surface)';
+                        d.style.padding = '8px 10px';
+                        d.style.borderRadius = '6px';
+                        d.style.border = '1px solid var(--border-subtle)';
+                        d.style.borderLeft = `3px solid ${item.passed ? 'var(--accent-emerald)' : 'var(--accent-rose)'}`;
+                        d.innerHTML = `
+                            <div style="display:flex; justify-content:space-between;">
+                                <strong>${item.criterion}</strong>
+                                <span style="color:${item.passed ? 'var(--accent-emerald)' : 'var(--accent-rose)'}; font-weight:700;">${item.passed ? 'PASS' : 'GAP'}</span>
+                            </div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${item.note || ''}</div>
+                        `;
+                        itemsBox.appendChild(d);
+                    });
+                }
+            }
+
+            if (t.mirt_theta && miniMirtChart) {
+                const order = ['algorithms', 'system_design', 'concurrency', 'databases', 'distributed_systems'];
+                miniMirtChart.data.datasets[0].data = order.map(k => t.mirt_theta[k] || 0.0);
+                miniMirtChart.update();
+            }
+
+            if (t.fraud_status) {
+                document.getElementById("trace-proctor-badge").textContent = `Risk: ${t.fraud_risk_score} (${t.fraud_status})`;
+            }
+
+            // --- 1. Manage Cached Turns History ---
+            if (t.turns_history && Array.isArray(t.turns_history) && t.turns_history.length > 0) {
+                cachedTurnsHistory = t.turns_history;
+            } else if (t.latest_turn_audit) {
+                const exists = cachedTurnsHistory.some(x => x.turn_index === t.latest_turn_audit.turn_index);
+                if (!exists) cachedTurnsHistory.push(t.latest_turn_audit);
+            }
+
+            // --- 2. Update Graphical Decision & Score Evolution Workflow (Pane-Flow) ---
+            if (t.latest_turn_audit) {
+                const audit = t.latest_turn_audit;
+                appendTurnAuditChip(audit);
+
+                const turnIdx = audit.turn_index || cachedTurnsHistory.length || 1;
+                const flowInd = document.getElementById("flow-turn-indicator");
+                if (flowInd) flowInd.textContent = `TURN #${turnIdx}: ${audit.skill || t.current_skill || 'ACTIVE'}`;
+
+                // Node 1: Candidate Input
+                const inSnippet = document.getElementById("wf-input-text");
+                if (inSnippet) inSnippet.textContent = audit.candidate_input ? `"${audit.candidate_input}"` : "Candidate response captured.";
+                const cleanBadge = document.getElementById("wf-clean-badge");
+                if (cleanBadge) cleanBadge.textContent = audit.latency_ms ? `${audit.latency_ms}ms (CAPTURED)` : "PROCESSED";
+
+                // Node 2: Shadow Evaluator
+                const ev = audit.evaluator || {};
+                const evObs = document.getElementById("wf-eval-obs");
+                if (evObs) {
+                    const isPass = (ev.observation === 1);
+                    evObs.textContent = `Observation: ${isPass ? 'PASS (1)' : 'GAP (0)'}`;
+                    evObs.className = isPass ? "badge badge-green" : "badge badge-amber";
+                }
+                const evSummary = document.getElementById("wf-eval-summary");
+                if (evSummary) evSummary.textContent = ev.summary || "Assessing technical depth, domain abstractions, and trade-off awareness.";
+                const rawDepth = ev.depth_score !== undefined ? ev.depth_score : 0.5;
+                const depthPct = Math.round((rawDepth > 1.0 ? rawDepth : rawDepth * 100));
+                const depthElem = document.getElementById("wf-depth-percent");
+                if (depthElem) depthElem.textContent = `${depthPct}%`;
+                const depthBar = document.getElementById("wf-depth-bar");
+                if (depthBar) {
+                    depthBar.style.width = `${depthPct}%`;
+                    depthBar.style.background = depthPct >= 70 ? 'var(--accent-emerald)' : (depthPct >= 40 ? 'var(--accent-cyan)' : 'var(--accent-amber)');
+                }
+
+                // Node 3: BKT Bayesian Update
+                const bkt = audit.bkt || {};
+                const bktDeltaElem = document.getElementById("wf-bkt-delta");
+                if (bktDeltaElem) {
+                    const d = bkt.delta !== undefined ? bkt.delta : ((bkt.posterior && bkt.prior) ? (bkt.posterior - bkt.prior) : 0);
+                    bktDeltaElem.textContent = `Δ: ${d >= 0 ? '+' : ''}${Number(d).toFixed(4)}`;
+                    bktDeltaElem.className = d >= 0 ? "badge badge-green" : "badge badge-rose";
+                }
+                const bktPrior = document.getElementById("wf-bkt-prior");
+                if (bktPrior) bktPrior.textContent = `Prior: ${Number(bkt.prior !== undefined ? bkt.prior : 0.35).toFixed(3)}`;
+                const bktPost = document.getElementById("wf-bkt-post");
+                if (bktPost) bktPost.textContent = `Post: ${Number(bkt.posterior !== undefined ? bkt.posterior : 0.35).toFixed(3)}`;
+                const bktStatus = document.getElementById("wf-bkt-status");
+                if (bktStatus) {
+                    const stat = bkt.status || "IN_PROGRESS";
+                    bktStatus.textContent = stat;
+                    bktStatus.className = stat === "MASTERED" ? "badge badge-green" : "badge badge-amber";
+                }
+
+                // Node 4: MIRT 5D Abilities
+                if (t.mirt_theta) {
+                    const th = t.mirt_theta;
+                    const setPill = (id, label, val) => {
+                        const elem = document.getElementById(id);
+                        if (elem) elem.textContent = `${label}: ${(val || 0.0) >= 0 ? '+' : ''}${Number(val || 0.0).toFixed(2)}`;
+                    };
+                    setPill("chip-algo", "Algo", th.algorithms);
+                    setPill("chip-sys", "Sys", th.system_design);
+                    setPill("chip-concur", "Concur", th.concurrency);
+                    setPill("chip-db", "DB", th.databases);
+                    setPill("chip-dist", "Dist", th.distributed_systems);
+                }
+
+                // Node 5: Policy FSM Decision
+                const pol = audit.policy || {};
+                const fsmAction = document.getElementById("wf-fsm-action");
+                if (fsmAction) fsmAction.textContent = `ACTION: ${pol.next_action || 'DIAGNOSTIC'}`;
+                const fsmDirective = document.getElementById("wf-fsm-directive");
+                if (fsmDirective) fsmDirective.textContent = `[DIRECTIVE]: ${pol.prompt_directive || 'Guiding candidate Socratic inquiry.'}`;
+                const fsmTransition = document.getElementById("wf-fsm-transition");
+                if (fsmTransition) {
+                    fsmTransition.textContent = `State: ${pol.previous_state || 'ACTIVE'} ➔ ${pol.current_state || 'ACTIVE'} (Scaffolding L${pol.scaffolding_level || 0})`;
+                }
+            }
+
+            // --- 3. Update Midway Audit Snapshot (Pane-Midway) ---
+            const midwayTotal = document.getElementById("midway-total-turns");
+            if (midwayTotal) midwayTotal.textContent = cachedTurnsHistory.length;
+            const midwayBkt = document.getElementById("midway-current-bkt");
+            if (midwayBkt && t.bkt_mastery !== undefined) midwayBkt.textContent = Number(t.bkt_mastery).toFixed(3);
+            const midwayBii = document.getElementById("midway-current-bii");
+            if (midwayBii && t.fraud_risk_score !== undefined) midwayBii.textContent = (1.0 - t.fraud_risk_score).toFixed(2);
+            const midwayState = document.getElementById("midway-current-state");
+            if (midwayState && t.state) midwayState.textContent = t.state;
+
+            const turnsCont = document.getElementById("midway-turns-container");
+            if (turnsCont && cachedTurnsHistory.length > 0) {
+                turnsCont.innerHTML = cachedTurnsHistory.map(turn => {
+                    const obsPass = (turn.evaluator && turn.evaluator.observation === 1);
+                    const rawD = (turn.evaluator && turn.evaluator.depth_score !== undefined) ? turn.evaluator.depth_score : 0.5;
+                    const depthPct = Math.round(rawD > 1.0 ? rawD : rawD * 100);
+                    const deltaVal = (turn.bkt && turn.bkt.delta !== undefined) ? turn.bkt.delta : ((turn.bkt && turn.bkt.posterior && turn.bkt.prior) ? (turn.bkt.posterior - turn.bkt.prior) : 0);
+                    const deltaStr = (deltaVal >= 0 ? '+' : '') + Number(deltaVal).toFixed(3);
+                    const priorStr = turn.bkt && turn.bkt.prior !== undefined ? Number(turn.bkt.prior).toFixed(3) : '0.350';
+                    const postStr = turn.bkt && turn.bkt.posterior !== undefined ? Number(turn.bkt.posterior).toFixed(3) : '0.350';
+                    const action = turn.policy ? (turn.policy.next_action || 'PROBE') : 'EVALUATE';
+                    const directive = turn.policy ? (turn.policy.prompt_directive || '') : '';
+                    const obsBadgeClass = obsPass ? 'badge-green' : 'badge-amber';
+                    const obsText = obsPass ? 'PASSED (1)' : 'STRUGGLING (0)';
+                    
+                    return `
+                        <div class="midway-turn-card" style="border-left: 3px solid ${obsPass ? 'var(--accent-emerald)' : 'var(--accent-amber)'}">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span style="font-weight:700; font-size:0.8rem; color:var(--text-primary);">
+                                    Turn #${turn.turn_index}: <strong style="color:var(--accent-cyan);">${turn.skill || 'TECHNICAL'}</strong>
+                                </span>
+                                <span class="badge ${obsBadgeClass}" style="font-size:0.65rem;">${obsText}</span>
+                            </div>
+                            <div style="font-size:0.75rem; color:#cbd5e1; margin-bottom:6px; font-style:italic; line-height:1.4;">
+                                "${(turn.candidate_input || turn.candidate_answer || '').substring(0, 160)}${(turn.candidate_input && turn.candidate_input.length > 160) ? '...' : ''}"
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1.2fr 0.8fr; gap:6px; background:rgba(0,0,0,0.28); padding:6px 8px; border-radius:6px; font-size:0.7rem; font-family:'JetBrains Mono'; margin-bottom:6px;">
+                                <div>BKT: ${priorStr} ➔ <strong style="color:var(--accent-emerald);">${postStr}</strong> (<span style="color:${deltaVal >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${deltaStr}</span>)</div>
+                                <div style="text-align:right;">Depth: <strong style="color:var(--accent-cyan);">${depthPct}%</strong></div>
+                            </div>
+                            <div style="font-size:0.72rem; color:#fde68a;">
+                                <strong>Decision [${action}]:</strong> ${directive}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function appendTurnAuditChip(audit) {
+            const chat = document.getElementById("chat-container");
+            if (!chat || !audit) return;
+            const existing = document.getElementById(`audit-chip-turn-${audit.turn_index}`);
+            if (existing) return;
+
+            // Ensure the candidate's spoken input is displayed right above its audit chip
+            const candInput = audit.candidate_input || audit.candidate_answer;
+            if (candInput && candInput.trim()) {
+                const userBubbles = chat.querySelectorAll(".message-bubble.user");
+                const lastUserBubble = userBubbles.length > 0 ? userBubbles[userBubbles.length - 1] : null;
+                const alreadyDisplayed = lastUserBubble && (lastUserBubble.dataset.turnIndex == audit.turn_index || lastUserBubble.textContent.includes(candInput.slice(0, 30)));
+                if (!alreadyDisplayed) {
+                    if (currentUserBubble) {
+                        currentUserBubble.dataset.turnIndex = audit.turn_index;
+                        finalizeUserBubble(candInput);
+                    } else {
+                        const bub = appendUserMessage(candInput);
+                        if (bub) bub.dataset.turnIndex = audit.turn_index;
+                    }
+                } else if (lastUserBubble && !lastUserBubble.dataset.turnIndex) {
+                    lastUserBubble.dataset.turnIndex = audit.turn_index;
+                }
+            }
+            
+            const chip = document.createElement("div");
+            chip.id = `audit-chip-turn-${audit.turn_index}`;
+            chip.className = "audit-chip";
+            chip.style.cssText = "align-self: center; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-subtle); border-radius: 20px; padding: 4px 12px; font-size: 0.72rem; font-family: 'JetBrains Mono'; color: #94a3b8; display: flex; align-items: center; gap: 8px; margin: 4px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.3); animation: messageFadeIn 0.25s ease-out;";
+            
+            const obsPass = (audit.evaluator && audit.evaluator.observation === 1);
+            const delta = (audit.bkt && audit.bkt.delta !== undefined) ? audit.bkt.delta : ((audit.bkt && audit.bkt.posterior && audit.bkt.prior) ? (audit.bkt.posterior - audit.bkt.prior) : 0);
+            const post = (audit.bkt && audit.bkt.posterior !== undefined) ? audit.bkt.posterior : 0.35;
+            const action = (audit.policy && audit.policy.next_action) || 'DIAGNOSTIC';
+            
+            chip.innerHTML = `
+                <span style="color: var(--accent-cyan); font-weight: 700;">⚡ Turn #${audit.turn_index}</span>
+                <span class="badge ${obsPass ? 'badge-green' : 'badge-amber'}" style="font-size: 0.65rem; padding: 1px 6px;">${obsPass ? 'PASS' : 'GAP'}</span>
+                <span>BKT Δ: <strong style="color: ${delta >= 0 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">${delta >= 0 ? '+' : ''}${Number(delta).toFixed(3)}</strong> ➔ P(L): <strong>${Number(post).toFixed(3)}</strong></span>
+                <span>FSM: <strong style="color: #fde68a;">${action}</strong></span>
+            `;
+            chat.appendChild(chip);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // Check and restore active session ONLY if THIS browser tab was running an active session
+        async function checkAndRestoreActiveSession() {
+            try {
+                // Strict isolation: only restore if THIS browser tab previously stored a session ID
+                const sessId = sessionStorage.getItem("active_interview_session_id");
+                if (!sessId) {
+                    console.log("[Restore] Pristine tab session. Standby for new interview.");
+                    return;
+                }
+
+                const stateRes = await fetch(`/api/session/${sessId}/state`);
+                if (!stateRes.ok) {
+                    sessionStorage.removeItem("active_interview_session_id");
+                    return;
+                }
+                const state = await stateRes.json();
+                if (!state || !state.turns_history || state.turns_history.length === 0) return;
+
+                const chat = document.getElementById("chat-container");
+                if (chat && chat.querySelectorAll(".message-bubble").length <= 1) {
+                    chat.innerHTML = "";
+                    currentSessionId = sessId;
+
+                    // Update telemetry link
+                    const telemLink = document.getElementById("nav-link-telemetry");
+                    if (telemLink) telemLink.href = `/telemetry?session_id=${sessId}`;
+
+                    // Restore candidate name and level if available
+                    if (state.candidate_name) {
+                        const nameInput = document.getElementById("candidate-name-input");
+                        if (nameInput) nameInput.value = state.candidate_name;
+                    }
+                    if (state.level) {
+                        const lvlSelect = document.getElementById("interview-level-select");
+                        if (lvlSelect) lvlSelect.value = state.level;
+                    }
+
+                    // Update UI controls to reflect active session state
+                    document.getElementById("btn-start-session").style.display = "none";
+                    document.getElementById("btn-pause-session").style.display = "inline-flex";
+                    document.getElementById("btn-current-report").style.display = "inline-flex";
+                    document.getElementById("btn-end-session").style.display = "inline-flex";
+                    document.getElementById("btn-mic").disabled = false;
+                    document.getElementById("input-box").disabled = false;
+                    document.getElementById("btn-send").disabled = false;
+
+                    state.turns_history.forEach(t => {
+                        if (t.question) {
+                            appendAiMessage(t.question);
+                        }
+                        if (t.candidate_input || t.candidate_answer) {
+                            const userText = t.candidate_input || t.candidate_answer;
+                            const bub = appendUserMessage(userText);
+                            if (bub) bub.dataset.turnIndex = t.turn_index;
+                        }
+                        appendTurnAuditChip(t);
+                    });
+
+                    if (state.telemetry) {
+                        updateLiveTelemetry(state.telemetry, state.active_topic || 'ACTIVE');
+                    }
+                }
+            } catch (e) {
+                console.log("[Restore] No active session to restore:", e);
+            }
+        }
+        window.addEventListener('DOMContentLoaded', checkAndRestoreActiveSession);
+
+        function setStageStatus(text, type) {
+            document.getElementById("topbar-status-text").textContent = text;
+            document.getElementById("agent-voice-state").textContent = `🎙️ ${text}`;
+            const dot = document.getElementById("topbar-pulse-dot");
+            if (type === "paused") dot.className = "pulse-dot paused";
+            else if (type === "disconnected") dot.className = "pulse-dot disconnected";
+            else dot.className = "pulse-dot";
+        }
+
+        function switchCockpitTab(tabKey) {
+            const tabs = ['flow', 'midway', 'trace', 'rubric', 'math', 'radar'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const pane = document.getElementById(`pane-${t}`);
+                if (btn) btn.classList.toggle('active', t === tabKey);
+                if (pane) pane.classList.toggle('active', t === tabKey);
+            });
+        }
+
+        // Prevent accidental tab closure / navigation while live voice interview is ongoing
+        window.addEventListener('beforeunload', (e) => {
+            if (isSessionActive && ws && ws.readyState === WebSocket.OPEN) {
+                e.preventDefault();
+                e.returnValue = 'An active voice interview session with Alex is running. Leaving will disconnect the session. Are you sure?';
+                return e.returnValue;
+            }
+        });
+    </script>
+</body>
+</html>

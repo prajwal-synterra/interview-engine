@@ -1,0 +1,759 @@
+Build a **React + Vite + Standard CSS** application called **Socratic Interview Engine Developer Console**, a desktop-first engineering dashboard for testing, debugging, and observing an AI-powered real-time voice interview platform.
+
+This is **not a marketing website** and **not a generic analytics dashboard**.
+
+The UI must resemble a realistic internal engineering tool built by a small team, similar to observability, AI tracing, and admin systems such as LangSmith, PostHog, Vercel Observability, or modern SaaS developer consoles.
+
+---
+
+# Technical Stack
+
+Use:
+
+- React + Vite
+- Standard CSS only
+- React Router
+- Context API or Zustand
+- Recharts for mini charts
+- Lucide React icons
+- Framer Motion (small animations only)
+
+Avoid:
+
+- Tailwind
+- Material UI
+- Heavy animations
+- Glassmorphism
+- Excessive gradients
+
+---
+
+# Design System
+
+## Theme
+
+Light mode only.
+
+```css
+--bg: #F8FAFC;
+--surface: #FFFFFF;
+--surface-2: #F1F5F9;
+
+--border: #E2E8F0;
+
+--text: #0F172A;
+--muted: #64748B;
+
+--blue: #2563EB;
+--purple: #7C3AED;
+--green: #10B981;
+--orange: #F59E0B;
+--red: #EF4444;
+```
+
+---
+
+## Typography
+
+Use:
+
+```text
+Inter
+```
+
+Hierarchy:
+
+```text
+Page Title: 24px
+Section Title: 18px
+Card Title: 15px
+Body: 14px
+Small Labels: 12px
+Logs: 12px monospace
+```
+
+---
+
+## Layout
+
+Desktop only:
+
+```text
+Sidebar: 250px
+Content: Remaining width
+
+Max width:
+100%
+Padding:
+20px
+Gap:
+16px
+```
+
+Card style:
+
+```css
+background: white;
+border: 1px solid #E2E8F0;
+border-radius: 14px;
+box-shadow:
+0 1px 2px rgba(0,0,0,0.04);
+```
+
+---
+
+# Application Structure
+
+Create these routes:
+
+```text
+/
+→ Live Interview
+
+/features
+→ Feature Controls
+
+/logs
+→ System Logs
+
+/analytics
+→ Engine Analytics
+
+/evaluation
+→ Evaluation Inspector
+
+/progress
+→ Implementation Tracker
+
+/settings
+→ Settings
+```
+
+---
+
+# Folder Structure
+
+```text
+src/
+
+components/
+    layout/
+        Sidebar
+        Topbar
+        StatusBar
+
+    interview/
+        TranscriptPanel
+        AudioWave
+        CandidateBubble
+        InterviewBubble
+        QuestionCard
+
+    feature/
+        ToggleCard
+        DependencyWarning
+        EngineConfigPanel
+
+    logs/
+        LogTable
+        EventTimeline
+        FilterBar
+
+    scoring/
+        BKTCard
+        MIRTCard
+        SkillGraph
+        PolicyCard
+
+    pipeline/
+        PipelineStage
+        PipelineFlow
+
+    common/
+        StatusChip
+        MiniMetric
+        ProgressBar
+        Tabs
+        SearchBox
+
+pages/
+    LiveInterview
+    FeatureControls
+    Logs
+    Evaluation
+    ProgressTracker
+
+data/
+    mockSession
+    mockLogs
+    mockFeatures
+
+store/
+    sessionStore
+    featureStore
+    logStore
+
+services/
+    websocketService
+    apiService
+
+styles/
+    global.css
+```
+
+---
+
+# Page 1 — Live Interview
+
+Create a 3-column layout:
+
+```text
+-----------------------------------------
+Sidebar
+
+Center Content
+
+Right Inspector
+-----------------------------------------
+```
+
+---
+
+## Left Sidebar
+
+Include:
+
+```text
+Logo:
+Socratic Interview Engine
+
+Navigation:
+• Live Interview
+• Feature Controls
+• System Logs
+• Analytics
+• Reports
+• Settings
+```
+
+Bottom:
+
+```text
+● FastAPI WebSocket Connected
+Latency: 28ms
+```
+
+---
+
+## Center Area
+
+Build a real interview client.
+
+Top:
+
+```text
+Session ID
+WebSocket Status
+Duration
+Start
+Pause
+End
+```
+
+Example:
+
+```text
+Session:
+sess_2026_001
+
+Connected
+04:32
+```
+
+---
+
+## Interview Area
+
+AI:
+
+```text
+Alex:
+How would you design a scalable real-time chat application?
+```
+
+Candidate:
+
+```text
+I would use WebSockets for bidirectional communication and a load balancer to distribute connections.
+```
+
+Show:
+
+- transcript bubbles
+- live STT
+- microphone waveform
+- speaking indicator
+- typing indicator
+
+---
+
+## Shadow Evaluator Card
+
+Show:
+
+```text
+Processing...
+Rubric Match: 78%
+Depth: Medium
+Observation: 1
+```
+
+Progress bar:
+
+```text
+68%
+```
+
+---
+
+## Pipeline Visualization
+
+Horizontal flow:
+
+```text
+Connect
+↓
+Audio
+↓
+STT
+↓
+Question
+↓
+Response
+↓
+Shadow Eval
+↓
+BKT
+↓
+MIRT
+↓
+Policy
+```
+
+Status:
+
+```text
+Green:
+Completed
+
+Blue:
+Current
+
+Gray:
+Waiting
+
+Red:
+Failed
+```
+
+---
+
+## Session Inspector
+
+Show:
+
+```text
+Phase:
+DEEP_DIVE
+
+FSM:
+QUESTIONING
+
+Difficulty:
+Medium
+
+Role:
+System Design
+
+Policy:
+DEEPEN
+```
+
+---
+
+## BKT
+
+```text
+Mastery:
+0.72
+```
+
+Progress bar.
+
+---
+
+## MIRT
+
+Five dimensions:
+
+```text
+Logic
+System Design
+Language
+Problem Solving
+Coding
+```
+
+Mini bar chart.
+
+---
+
+# Right Panel — Feature Inspector
+
+Create toggle rows.
+
+Each row:
+
+```text
+[ON/OFF]
+
+Gemini Live WebSocket
+Status: Active
+
+Description:
+Real-time interview engine
+```
+
+Features:
+
+```text
+Gemini Live
+Shadow Evaluator
+Rubric Isolation
+BKT
+MIRT
+HHGKT
+Policy Router
+Contradiction Probe
+CPF
+Domain Evaluation
+Speech Cleaner
+Prompt Guard
+Question Dedup
+Report Generator
+```
+
+Top:
+
+```text
+Enable All
+Disable All
+Reset
+```
+
+Dependency logic:
+
+Example:
+
+```text
+Shadow OFF
+↓
+
+Warning:
+
+BKT may stop receiving observations.
+MIRT may receive incomplete data.
+```
+
+---
+
+# Bottom Debug Tabs
+
+Tabs:
+
+```text
+Logs
+WebSocket
+STT
+Shadow Output
+Scoring
+Policy
+Database
+Performance
+```
+
+Logs:
+
+```text
+14:22:10
+INFO
+websocket
+Connected
+
+14:22:15
+INFO
+stt
+Transcript complete
+
+14:22:17
+INFO
+shadow
+Observation=1
+
+14:22:18
+INFO
+bkt
+Mastery=0.72
+```
+
+Use:
+
+```css
+font-family: monospace;
+```
+
+---
+
+# Feature Controls Page
+
+Left:
+
+```text
+Categories:
+
+Communication
+LLM
+Evaluation
+Scoring
+Security
+Persistence
+Reporting
+```
+
+Right:
+
+Selected engine:
+
+```text
+Shadow Evaluator
+```
+
+Show:
+
+```text
+Backend:
+evaluator/shadow.py
+
+Dependencies:
+Gemini API
+Redis
+PostgreSQL
+
+Input preview
+Output preview
+
+Last execution
+
+Error messages
+
+Execution history
+```
+
+Button:
+
+```text
+Run Test
+```
+
+---
+
+# Logs Page
+
+Create:
+
+- search bar
+- filters
+- event timeline
+
+Filters:
+
+```text
+Severity
+Session
+Engine
+Component
+```
+
+Log table:
+
+```text
+Time
+Level
+Engine
+Event
+Duration
+Tokens
+Status
+```
+
+Expandable:
+
+```text
+Input payload
+Output payload
+Stack trace
+```
+
+---
+
+# Evaluation Page
+
+Show pipeline:
+
+```text
+Transcript
+↓
+Cleaner
+↓
+Rubric
+↓
+Shadow Eval
+↓
+Observation
+↓
+BKT
+↓
+MIRT
+↓
+Policy
+↓
+Score
+```
+
+Show:
+
+```text
+Transcript
+
+Rubric Version
+
+Observation
+
+Depth
+
+Difficulty
+
+BKT before
+
+BKT after
+
+MIRT changes
+
+Policy decision
+```
+
+---
+
+# Progress Tracker Page
+
+Table:
+
+```text
+Feature
+Module
+Status
+Dependencies
+Tests
+Last Verified
+Gap
+Priority
+```
+
+Statuses:
+
+```text
+Implemented
+Partial
+Missing
+Integration Missing
+Failed
+```
+
+Show gaps:
+
+```text
+Rubric Lock
+Authentication
+Input Sanitization
+CPF Integration
+Contradiction Automation
+Speech Cleaning
+Question Dedup
+Question Bank
+Token Accounting
+```
+
+---
+
+# Mock Data
+
+Generate realistic mock JSON:
+
+```javascript
+mockFeatures.js
+mockLogs.js
+mockSessions.js
+mockEvaluation.js
+```
+
+Use 20–50 realistic records.
+
+---
+
+# Interactions
+
+Implement:
+
+```text
+Toggle switches
+
+Tabs
+
+Search
+
+Filters
+
+Expand log row
+
+Live log updates
+
+Pipeline animation
+
+Progress updates
+
+WebSocket simulation
+```
+
+---
+
+# Important UI Rules
+
+The user must immediately understand:
+
+1. What is happening in the interview right now.
+2. Which engines are active.
+3. What changed after a candidate answer.
+4. Which backend systems executed.
+5. What failed.
+6. Which scores are intermediate vs final.
+
+Do not create:
+
+- marketing pages
+- huge charts
+- empty cards
+- fake AI art
+- dark theme
+- oversized components
+
+Build this as a realistic, information-dense engineering dashboard suitable for a proof-of-concept AI interview platform with FastAPI backend integration.
