@@ -422,6 +422,7 @@ async def websocket_interview(websocket: WebSocket):
             _mic_queue: asyncio.Queue = asyncio.Queue(maxsize=256)
             candidate_transcript_buffer = ""
             alex_turn_complete_event = asyncio.Event()
+            is_alex_speaking = True  # Starts True during Alex's opening greeting
 
             # ── Loop 1: Audio Forward Loop (Browser -> Gemini Live) ──
             async def mic_forward_loop():
@@ -432,7 +433,9 @@ async def websocket_interview(websocket: WebSocket):
                         chunk = await _mic_queue.get()
                         if chunk is None:
                             break
-                        if session and not is_paused:
+                        # Only forward mic audio when Alex is NOT speaking and session is NOT paused
+                        # This prevents speaker audio feedback loops and allows Gemini Live to generate turns cleanly
+                        if session and not is_paused and not is_alex_speaking:
                             chunks_count += 1
                             total_bytes += len(chunk)
                             await session.send_realtime_input(
@@ -447,7 +450,7 @@ async def websocket_interview(websocket: WebSocket):
 
             # ── Loop 2: Gemini Receive Loop (Gemini Live -> Browser) ──
             async def gemini_receive_loop():
-                nonlocal alex_latest_question, alex_finish_timestamp, candidate_transcript_buffer
+                nonlocal alex_latest_question, alex_finish_timestamp, candidate_transcript_buffer, is_alex_speaking
                 try:
                     async for response in session.receive():
                         sc = response.server_content
@@ -462,6 +465,7 @@ async def websocket_interview(websocket: WebSocket):
 
                         # 2. Handle Alex Spoken Response Audio
                         if sc.model_turn:
+                            is_alex_speaking = True
                             for part in sc.model_turn.parts:
                                 if part.inline_data and part.inline_data.data:
                                     # Forward raw PCM audio bytes to browser
@@ -472,6 +476,7 @@ async def websocket_interview(websocket: WebSocket):
 
                         # 3. Handle Alex Spoken Response Transcription (real-time words from Gemini Live voice)
                         if sc.output_transcription and sc.output_transcription.text:
+                            is_alex_speaking = True
                             tx = sc.output_transcription.text
                             alex_latest_question += tx
                             await websocket.send_json({"event": "ai_transcript_chunk", "text": tx})
@@ -486,10 +491,12 @@ async def websocket_interview(websocket: WebSocket):
                         # 5. Handle Interruption
                         if sc.interrupted:
                             log_event("GEMINI_LIVE", "Alex was interrupted by candidate speech.")
+                            is_alex_speaking = False
                             await websocket.send_json({"event": "ai_interrupted"})
 
                         # 6. Handle Turn Completion
                         if sc.turn_complete:
+                            is_alex_speaking = False
                             alex_finish_timestamp = time.time()
                             alex_turn_complete_event.set()
                             await websocket.send_json({"event": "turn_complete"})
@@ -777,7 +784,10 @@ async def websocket_interview(websocket: WebSocket):
                             # Stop in-flight audio if playing
                             await websocket.send_json({"event": "ai_interrupted"})
 
-                            # Process in background without waiting
+                            # Set Alex turn active so mic forwarding is paused while Alex responds
+                            is_alex_speaking = True
+
+                            # Process turn in background without waiting (runs blueprint / shadow evaluator)
                             asyncio.create_task(process_candidate_speech_turn(user_text))
 
                             # Send prompt to Gemini Live session

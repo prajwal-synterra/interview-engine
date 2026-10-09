@@ -265,22 +265,10 @@ export class InterviewWebSocket {
 
       processor.onaudioprocess = (e) => {
         if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        // Do not forward mic samples while Alex is speaking to prevent speaker acoustic feedback
+        if (this.isAlexSpeaking) return;
+
         const inputData = e.inputBuffer.getChannelData(0);
-
-        // Calculate audio RMS energy for candidate speech activity & barge-in
-        let sumSquares = 0;
-        for (let i = 0; i < inputData.length; i++) {
-          sumSquares += inputData[i] * inputData[i];
-        }
-        const rms = Math.sqrt(sumSquares / inputData.length);
-
-        // Barge-in: If candidate starts speaking over Alex
-        if (rms > 0.035 && this.isAlexSpeaking) {
-          console.log("[BargeIn] Candidate interrupted Alex (RMS:", rms.toFixed(4), ")");
-          this.stopAudioPlayback();
-          this.sendJson({ event: "candidate_interrupted" });
-        }
-
         // Correctly downsample to 16kHz for Gemini Live multimodal voice input
         const downsampled = downsampleTo16k(inputData, micCtx.sampleRate);
         const pcm16 = new Int16Array(downsampled.length);
@@ -311,11 +299,8 @@ export class InterviewWebSocket {
           rec.lang = "en-US";
 
           rec.onresult = (evt) => {
-            // If Alex is speaking, candidate speaking triggers barge-in
-            if (this.isAlexSpeaking) {
-              this.stopAudioPlayback();
-              this.sendJson({ event: "candidate_interrupted" });
-            }
+            // Do not transcribe speaker output while Alex is speaking
+            if (this.isAlexSpeaking) return;
 
             let fullTurnTranscript = "";
             for (let i = 0; i < evt.results.length; ++i) {
