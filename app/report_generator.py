@@ -337,9 +337,10 @@ Keep the tone encouraging, technical, precise, and devoid of corporate clichés.
                 thinking_config=types.ThinkingConfig(thinking_budget=0)
             )
 
+            report_model = os.getenv("EVALUATOR_MODEL", "gemini-3.8-flash")
             response = await asyncio.wait_for(
                 _client.aio.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=report_model,
                     contents=[prompt],
                     config=config
                 ),

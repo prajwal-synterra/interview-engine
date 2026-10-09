@@ -802,6 +802,15 @@ async def websocket_interview(websocket: WebSocket):
                             # Set Alex turn active so mic forwarding is paused while Alex responds
                             is_alex_speaking = True
 
+                            # Extract candidate name immediately if in INTRO phase
+                            if session_phase == "INTRO":
+                                extracted = extract_candidate_name_from_intro(user_text)
+                                if extracted:
+                                    candidate_name = extracted
+                                    ACTIVE_SESSIONS[session_id]["candidate_name"] = candidate_name
+                                    log_event("NAME_IDENTIFIED", f"Identified candidate name: {candidate_name}")
+                                    await websocket.send_json({"event": "candidate_name_updated", "name": candidate_name})
+
                             # Process turn in background without waiting (runs blueprint / shadow evaluator)
                             asyncio.create_task(process_candidate_speech_turn(user_text))
 
@@ -813,6 +822,7 @@ async def websocket_interview(websocket: WebSocket):
                                 f"[Candidate: {candidate_name}, Active Topic: {active_topic}]\n"
                                 f"Respond Socratically as Alex the interviewer in natural spoken English (2-3 sentences max). Never use Markdown or bullets."
                             )
+                            log_event("GEMINI_LIVE_SEND", f"Forwarding candidate turn to Gemini Live for '{candidate_name or 'Candidate'}'")
                             await session.send_client_content(
                                 turns=[types.Content(role="user", parts=[types.Part.from_text(text=prompt_payload)])],
                                 turn_complete=True

@@ -36,13 +36,15 @@ async def evaluate_candidate_response(
     candidate_answer: str,
     scaffolding_level: int = 0,
     ecosystem_context: str = "",
-    model_name: str = "gemini-2.5-flash",
+    model_name: Optional[str] = None,
     timeout_seconds: float = 6.5
 ) -> Dict[str, Any]:
     """
     Evaluates candidate response using structured JSON output from Gemini REST API.
     Does not block audio streaming - runs asynchronously in background with a strict 6.5s timeout.
     """
+    if not model_name:
+        model_name = os.getenv("EVALUATOR_MODEL", "gemini-3.8-flash")
     prompt = f"""You are the Shadow Technical Evaluator in a Socratic Engineering Interview.
 Evaluate the candidate's technical response against the rubric criteria.
 CONTEXT:
