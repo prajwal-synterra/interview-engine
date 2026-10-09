@@ -183,12 +183,25 @@ def build_dynamic_pillar_graph(
 
     # 1. Register Nodes
     for p in matched_pillars:
-        pid = p.get("pillar_id") or p.get("pillarId")
+        custom_node_prior = tier_prior
+        if isinstance(p, dict):
+            pid = p.get("pillar_id") or p.get("pillarId")
+            name = p.get("name", pid)
+        elif isinstance(p, (tuple, list)):
+            pid = p[0]
+            name = str(p[0])
+            if len(p) > 1 and isinstance(p[1], (int, float)):
+                custom_node_prior = float(p[1])
+        elif isinstance(p, str):
+            pid = p
+            name = p
+        else:
+            continue
+
         if not pid:
             continue
         pillar_ids.append(pid)
-        name = p.get("name", pid)
-        graph.add_skill(pid, custom_prior=tier_prior, description=name)
+        graph.add_skill(pid, custom_prior=custom_node_prior, description=name)
 
     # 2. Wire Ontology Edges
     active_set = set(pillar_ids)

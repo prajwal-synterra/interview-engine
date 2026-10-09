@@ -283,7 +283,11 @@ async def websocket_interview(websocket: WebSocket):
     })
 
     # Default starter skills
-    initial_skills = [("SYSTEM_DESIGN", 0.40), ("CONCURRENCY", 0.35), ("DISTRIBUTED_CACHING", 0.35)]
+    initial_skills = [
+        {"pillar_id": "SYSTEM_DESIGN", "name": "System Architecture"},
+        {"pillar_id": "CONCURRENCY", "name": "Concurrency Models"},
+        {"pillar_id": "DISTRIBUTED_CACHING", "name": "Distributed Caching"}
+    ]
     policy_router.initialize_session(initial_skills)
 
     # Session Socratic State
