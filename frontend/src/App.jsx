@@ -129,11 +129,15 @@ export default function App() {
         }
       });
     } else if (msg.event === 'turn_complete') {
-      setIsAlexSpeaking(false);
       setConversationHistory((prev) => {
         const last = prev[prev.length - 1];
         if (last && last.type === 'ai') {
-          return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+          return [
+            ...prev.slice(0, -1),
+            { ...last, text: last.text || msg.text || '', isStreaming: false }
+          ];
+        } else if (msg.text) {
+          return [...prev, { type: 'ai', text: msg.text, time: timeStr, isStreaming: false }];
         }
         return prev;
       });

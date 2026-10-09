@@ -49,15 +49,18 @@ export class InterviewWebSocket {
     this.speechRecognition = null;
     this.micChunksSent = 0;
 
-    // Silence detection & conversational state
+    // Silence detection & conversational turn lock
     this.currentCandidateTranscript = "";
     this.silenceTimer = null;
-    this.silenceThresholdMs = 1500; // 1.5 seconds of silence -> auto-submit speech turn
+    this.silenceThresholdMs = 1800; // 1.8 seconds of silence -> auto-submit speech turn
     this.isAlexSpeaking = false;
+    this.isWaitingForAlex = false;
+    this.alexTurnCompleteReceived = false;
+    this.turnStartIndex = 0;
   }
 
   handleSpeechActivity(text) {
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim() || this.isAlexSpeaking || this.isWaitingForAlex) return;
     this.currentCandidateTranscript = text.trim();
 
     // Stream live text to UI for real-time visual feedback
@@ -80,6 +83,11 @@ export class InterviewWebSocket {
       this.silenceTimer = null;
     }
 
+    // Do not submit if Alex is speaking or if we already submitted and are waiting for Alex
+    if (this.isAlexSpeaking || this.isWaitingForAlex) {
+      return;
+    }
+
     const transcriptToSubmit = (this.currentCandidateTranscript || "").trim();
     if (!transcriptToSubmit || transcriptToSubmit.length < 3) {
       return;
@@ -87,19 +95,20 @@ export class InterviewWebSocket {
 
     console.log("[SilenceDetector] Auto-submitting candidate speech turn:", transcriptToSubmit);
 
+    // Lock candidate turn so no duplicates are submitted until Alex finishes his turn
+    this.isWaitingForAlex = true;
+    this.currentCandidateTranscript = "";
+
     // 1. Seal candidate bubble in UI
     this.onCandidateSpeechFinal(transcriptToSubmit);
 
-    // 2. Clear current candidate transcript buffer for the next turn
-    this.currentCandidateTranscript = "";
-
-    // 3. Send over WebSocket to live_server.py so Alex immediately replies
+    // 2. Send over WebSocket to live_server.py so Alex immediately replies
     this.sendJson({
       action: "candidate_speech_finished",
       transcript: transcriptToSubmit
     });
 
-    // 4. Recycle speech recognition instance so next turn accumulates cleanly
+    // 3. Recycle speech recognition instance so next turn starts with a clean buffer
     if (this.speechRecognition) {
       try {
         this.speechRecognition.stop();
@@ -136,7 +145,9 @@ export class InterviewWebSocket {
     if (this.audioCtx) {
       this.nextPlayTime = this.audioCtx.currentTime;
     }
+    this.alexTurnCompleteReceived = true;
     this.isAlexSpeaking = false;
+    this.isWaitingForAlex = false;
     this.onAudioPlayState(false);
   }
 
@@ -173,9 +184,15 @@ export class InterviewWebSocket {
 
       source.onended = () => {
         this.activeSources = this.activeSources.filter((s) => s !== source);
-        if (this.audioCtx && this.audioCtx.currentTime >= this.nextPlayTime - 0.05) {
-          this.isAlexSpeaking = false;
-          this.onAudioPlayState(false);
+        if (this.audioCtx && this.activeSources.length === 0 && this.audioCtx.currentTime >= this.nextPlayTime - 0.05) {
+          // Only release speaking state once server has ALSO confirmed turn is complete!
+          if (this.alexTurnCompleteReceived) {
+            this.isAlexSpeaking = false;
+            this.isWaitingForAlex = false;
+            this.onAudioPlayState(false);
+            this.currentCandidateTranscript = "";
+            this.turnStartIndex = 0;
+          }
         }
       };
     } catch (e) {
@@ -213,7 +230,22 @@ export class InterviewWebSocket {
         if (typeof event.data === "string") {
           try {
             const data = JSON.parse(event.data);
-            if (data.event === "ai_interrupted") {
+            if (data.event === "turn_complete") {
+              this.alexTurnCompleteReceived = true;
+              if (this.activeSources.length === 0) {
+                this.isWaitingForAlex = false;
+                this.isAlexSpeaking = false;
+                this.onAudioPlayState(false);
+                this.currentCandidateTranscript = "";
+                this.turnStartIndex = 0;
+              }
+            } else if (data.event === "ai_turn_start") {
+              this.isAlexSpeaking = true;
+              this.isWaitingForAlex = true;
+              this.alexTurnCompleteReceived = false;
+              this.currentCandidateTranscript = "";
+              this.onAudioPlayState(true);
+            } else if (data.event === "ai_interrupted") {
               this.stopAudioPlayback();
             }
             this.onMessage(data);
@@ -299,17 +331,18 @@ export class InterviewWebSocket {
           rec.lang = "en-US";
 
           rec.onresult = (evt) => {
-            // Do not transcribe speaker output while Alex is speaking
-            if (this.isAlexSpeaking) return;
+            // Do not transcribe while Alex is speaking or while waiting for Alex
+            if (this.isAlexSpeaking || this.isWaitingForAlex) return;
 
-            let fullTurnTranscript = "";
-            for (let i = 0; i < evt.results.length; ++i) {
+            let turnTranscript = "";
+            for (let i = this.turnStartIndex; i < evt.results.length; ++i) {
               const res = evt.results[i];
-              fullTurnTranscript += (fullTurnTranscript ? " " : "") + res[0].transcript;
+              turnTranscript += (turnTranscript ? " " : "") + res[0].transcript;
             }
 
-            if (fullTurnTranscript.trim()) {
-              this.handleSpeechActivity(fullTurnTranscript.trim());
+            turnTranscript = turnTranscript.trim();
+            if (turnTranscript) {
+              this.handleSpeechActivity(turnTranscript);
             }
           };
 
@@ -318,6 +351,7 @@ export class InterviewWebSocket {
           };
 
           rec.onend = () => {
+            this.turnStartIndex = 0;
             // Automatically resume continuous listening for candidate's next speech turn
             if (this.mediaStream && this.speechRecognition) {
               try {
@@ -327,7 +361,7 @@ export class InterviewWebSocket {
                   if (this.mediaStream && this.speechRecognition) {
                     try { this.speechRecognition.start(); } catch {}
                   }
-                }, 100);
+                }, 150);
               }
             }
           };

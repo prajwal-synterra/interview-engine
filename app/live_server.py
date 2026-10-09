@@ -499,7 +499,11 @@ async def websocket_interview(websocket: WebSocket):
                             is_alex_speaking = False
                             alex_finish_timestamp = time.time()
                             alex_turn_complete_event.set()
-                            await websocket.send_json({"event": "turn_complete"})
+                            full_alex_speech = alex_latest_question.strip()
+                            if full_alex_speech:
+                                log_speech("Alex", full_alex_speech)
+                            await websocket.send_json({"event": "turn_complete", "text": full_alex_speech})
+                            alex_latest_question = ""
 
                 except asyncio.CancelledError:
                     pass
@@ -518,7 +522,8 @@ async def websocket_interview(websocket: WebSocket):
                 "Keep your spoken opening to 2-3 concise, natural sentences. Speak conversationally and never use Markdown, bullet points, asterisks, or code blocks in speech."
             )
             await session.send_client_content(
-                turns=[types.Content(role="user", parts=[types.Part.from_text(text=greeting_instruction)])]
+                turns=[types.Content(role="user", parts=[types.Part.from_text(text=greeting_instruction)])],
+                turn_complete=True
             )
             await websocket.send_json({"event": "ai_turn_start"})
 
@@ -567,10 +572,11 @@ async def websocket_interview(websocket: WebSocket):
                     transcript=user_text,
                     latency_ms=latency_ms,
                     is_contradiction_probe=False,
-                    accepted_contradiction=False
+                    passed_contradiction_probe=None
                 )
                 telemetry["proctor_bii"] = proctor.bii
-                log_proctor(proctor.bii, 1.0 - proctor.bii, proctor_turn.verdict)
+                proctor_status = "NORMAL" if proctor.bii >= 0.70 else "SUSPICIOUS"
+                log_proctor(proctor.bii, 1.0 - proctor.bii, proctor_status)
 
                 # 3. Policy Router FSM & BKT Bayesian Update
                 await broadcast_telemetry("Policy Router FSM")
@@ -632,7 +638,7 @@ async def websocket_interview(websocket: WebSocket):
                     "scaffolding_level": policy_router.current_scaffolding_level,
                     "bkt_posterior": post_val,
                     "latency_ms": latency_ms,
-                    "proctor_flags": proctor_turn.flags_triggered
+                    "proctor_flags": [f.flag_type for f in proctor.flags]
                 })
 
                 turns_on_active_topic += 1
@@ -737,6 +743,7 @@ async def websocket_interview(websocket: WebSocket):
                     log_event("SPEECH_TURN_ERROR", f"Error in process_candidate_speech_turn: {e}")
 
             # ── Main WebSocket Incoming Message Loop ──
+            last_candidate_submit_time = 0.0
             while True:
                 msg = await websocket.receive()
 
@@ -778,11 +785,19 @@ async def websocket_interview(websocket: WebSocket):
                     # Candidate Finished Speaking (either via silence detector auto-submit or manual text submit)
                     raw_text = data.get("transcript") or data.get("text")
                     if raw_text and raw_text.strip():
+                        now = time.time()
+                        if now - last_candidate_submit_time < 3.0:
+                            continue
                         user_text = clean_candidate_transcript(raw_text)
                         if user_text and len(user_text.strip()) >= 3:
+                            last_candidate_submit_time = now
+                            candidate_transcript_buffer = ""
+                            while not _mic_queue.empty():
+                                try:
+                                    _mic_queue.get_nowait()
+                                except Exception:
+                                    pass
                             log_event("TURN_AUTO_SUBMIT", f"Candidate turn processed ({ev}): '{user_text[:60]}...'")
-                            # Stop in-flight audio if playing
-                            await websocket.send_json({"event": "ai_interrupted"})
 
                             # Set Alex turn active so mic forwarding is paused while Alex responds
                             is_alex_speaking = True
