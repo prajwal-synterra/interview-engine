@@ -1,24 +1,56 @@
 /**
  * WebSocket & Audio Service for real-time live voice interview
  * Handles bidirectional WebSocket events, PCM audio playback from Alex,
- * and 16kHz microphone PCM streaming.
+ * 16kHz microphone PCM streaming, and real-time speech recognition captioning.
  */
 
+function downsampleTo16k(input, fromRate) {
+  if (fromRate === 16000) return input;
+  const ratio = fromRate / 16000;
+  const newLength = Math.round(input.length / ratio);
+  const result = new Float32Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < input.length; i++) {
+      accum += input[i];
+      count++;
+    }
+    result[offsetResult] = count > 0 ? accum / count : 0;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
 export class InterviewWebSocket {
-  constructor({ onMessage, onStatusChange, onAudioPlayState }) {
+  constructor({
+    onMessage,
+    onStatusChange,
+    onAudioPlayState,
+    onCandidateSpeechChunk,
+    onCandidateSpeechFinal
+  }) {
     this.ws = null;
     this.onMessage = onMessage || (() => {});
     this.onStatusChange = onStatusChange || (() => {});
     this.onAudioPlayState = onAudioPlayState || (() => {});
+    this.onCandidateSpeechChunk = onCandidateSpeechChunk || (() => {});
+    this.onCandidateSpeechFinal = onCandidateSpeechFinal || (() => {});
     this.isConnected = false;
     this.audioCtx = null;
     this.nextPlayTime = 0;
     this.mediaStream = null;
     this.audioProcessor = null;
     this.activeSources = [];
+    this.speechRecognition = null;
+    this.micChunksSent = 0;
   }
 
-  initAudio() {
+  async initAudio() {
     if (!this.audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (AudioContextClass) {
@@ -26,7 +58,11 @@ export class InterviewWebSocket {
       }
     }
     if (this.audioCtx && this.audioCtx.state === "suspended") {
-      this.audioCtx.resume();
+      try {
+        await this.audioCtx.resume();
+      } catch (e) {
+        console.warn("Could not resume audioCtx:", e);
+      }
     }
   }
 
@@ -46,9 +82,9 @@ export class InterviewWebSocket {
     this.onAudioPlayState(false);
   }
 
-  playPCMChunk(arrayBuffer) {
+  async playPCMChunk(arrayBuffer) {
     try {
-      this.initAudio();
+      await this.initAudio();
       if (!this.audioCtx) return;
 
       const alignedLength = arrayBuffer.byteLength - (arrayBuffer.byteLength % 2);
@@ -145,10 +181,9 @@ export class InterviewWebSocket {
 
   async startMicrophone() {
     try {
-      this.initAudio();
+      await this.initAudio();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          sampleRate: 16000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
@@ -157,29 +192,87 @@ export class InterviewWebSocket {
       });
       this.mediaStream = stream;
 
-      const micCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const micCtx = new AudioContextClass();
+      if (micCtx.state === "suspended") {
+        await micCtx.resume();
+      }
+
       const micSource = micCtx.createMediaStreamSource(stream);
-      const processor = micCtx.createScriptProcessor(2048, 1, 1);
+      // 4096 samples provides responsive frames with minimal CPU jitter
+      const processor = micCtx.createScriptProcessor(4096, 1, 1);
+      this.micChunksSent = 0;
 
       processor.onaudioprocess = (e) => {
         if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
         const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
+        // Correctly downsample to 16kHz for Gemini Live multimodal voice input
+        const downsampled = downsampleTo16k(inputData, micCtx.sampleRate);
+        const pcm16 = new Int16Array(downsampled.length);
+        for (let i = 0; i < downsampled.length; i++) {
+          const s = Math.max(-1, Math.min(1, downsampled[i]));
           pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
         this.ws.send(pcm16.buffer);
+        this.micChunksSent++;
       };
 
       micSource.connect(processor);
-      // Route through a zero-gain node so processor fires continuously without echoing to speakers
+      // Route through a zero-gain node so processor fires continuously without audio feedback
       const muteGain = micCtx.createGain();
       muteGain.gain.value = 0;
       processor.connect(muteGain);
       muteGain.connect(micCtx.destination);
 
       this.audioProcessor = { micCtx, micSource, processor, muteGain };
+
+      // Start Web Speech API in browser for instant real-time live chat captioning
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRec) {
+        try {
+          const rec = new SpeechRec();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = "en-US";
+
+          rec.onresult = (evt) => {
+            let interim = "";
+            let final = "";
+            for (let i = evt.resultIndex; i < evt.results.length; ++i) {
+              const res = evt.results[i];
+              if (res.isFinal) {
+                final += res[0].transcript;
+              } else {
+                interim += res[0].transcript;
+              }
+            }
+            if (interim) {
+              this.onCandidateSpeechChunk(interim.trim(), false);
+            }
+            if (final) {
+              this.onCandidateSpeechFinal(final.trim());
+            }
+          };
+
+          rec.onerror = (err) => {
+            console.warn("Web Speech error:", err);
+          };
+
+          rec.onend = () => {
+            if (this.mediaStream && this.speechRecognition) {
+              try {
+                this.speechRecognition.start();
+              } catch {}
+            }
+          };
+
+          rec.start();
+          this.speechRecognition = rec;
+        } catch (e) {
+          console.warn("Could not start SpeechRecognition:", e);
+        }
+      }
+
       return true;
     } catch (err) {
       console.warn("Microphone access error:", err);
@@ -188,6 +281,13 @@ export class InterviewWebSocket {
   }
 
   stopMicrophone(transcript = "") {
+    if (this.speechRecognition) {
+      try {
+        this.speechRecognition.onend = null;
+        this.speechRecognition.stop();
+      } catch {}
+      this.speechRecognition = null;
+    }
     if (this.audioProcessor) {
       try {
         this.audioProcessor.processor.disconnect();
@@ -244,3 +344,4 @@ export class InterviewWebSocket {
     this.onStatusChange({ connected: false, latency: "—" });
   }
 }
+

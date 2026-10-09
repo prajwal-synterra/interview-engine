@@ -625,6 +625,20 @@ body {
   line-height: 1.45;
 }
 
+.typing-cursor {
+  display: inline-block;
+  margin-left: 3px;
+  font-size: 13px;
+  color: var(--blue);
+  animation: blinkCursor 0.8s infinite;
+  vertical-align: middle;
+}
+
+@keyframes blinkCursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .bubble-timestamp {
   font-size: 11px;
   color: var(--muted);

@@ -404,7 +404,7 @@ async def websocket_interview(websocket: WebSocket):
     live_config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(language_code="en-US"),
-        input_audio_transcription=types.AudioTranscriptionConfig(language_codes=["en-US", "en-IN"]),
+        input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         system_instruction=types.Content(parts=[types.Part.from_text(text=system_instruction)]),
         realtime_input_config=types.RealtimeInputConfig(
@@ -425,15 +425,21 @@ async def websocket_interview(websocket: WebSocket):
 
             # ── Loop 1: Audio Forward Loop (Browser -> Gemini Live) ──
             async def mic_forward_loop():
+                chunks_count = 0
+                total_bytes = 0
                 try:
                     while True:
                         chunk = await _mic_queue.get()
                         if chunk is None:
                             break
                         if session and not is_paused:
+                            chunks_count += 1
+                            total_bytes += len(chunk)
                             await session.send_realtime_input(
-                                audio=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000")
+                                media=types.Blob(data=chunk, mime_type="audio/pcm;rate=16000")
                             )
+                            if chunks_count % 50 == 0:
+                                log_event("MIC_AUDIO", f"Forwarded {chunks_count} PCM chunks ({total_bytes} bytes) to Gemini Live")
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
@@ -448,15 +454,14 @@ async def websocket_interview(websocket: WebSocket):
                         if not sc:
                             continue
 
-                        # Handle Alex Spoken Response
-                        if sc.model_turn:
-                            # If candidate was speaking over mic, immediately process their speech in the background without waiting
-                            if candidate_transcript_buffer and candidate_transcript_buffer.strip():
-                                prev_speech = clean_candidate_transcript(candidate_transcript_buffer)
-                                candidate_transcript_buffer = ""
-                                if prev_speech and len(prev_speech) >= 3:
-                                    asyncio.create_task(process_candidate_speech_turn(prev_speech))
+                        # 1. Handle Candidate Speech Transcription from Gemini Live
+                        if sc.input_transcription and sc.input_transcription.text:
+                            tx = sc.input_transcription.text
+                            candidate_transcript_buffer += tx
+                            await websocket.send_json({"event": "candidate_transcript_chunk", "text": tx})
 
+                        # 2. Handle Alex Spoken Response Audio
+                        if sc.model_turn:
                             for part in sc.model_turn.parts:
                                 if part.inline_data and part.inline_data.data:
                                     # Forward raw PCM audio bytes to browser
@@ -465,19 +470,25 @@ async def websocket_interview(websocket: WebSocket):
                                     alex_latest_question += part.text
                                     await websocket.send_json({"event": "ai_transcript_chunk", "text": part.text})
 
-                        # Handle Candidate Speech Transcription
-                        if hasattr(sc, "input_transcription") and sc.input_transcription:
-                            tx = sc.input_transcription.text
-                            if tx:
-                                candidate_transcript_buffer += tx
-                                await websocket.send_json({"event": "candidate_transcript_chunk", "text": tx})
+                        # 3. Handle Alex Spoken Response Transcription (real-time words from Gemini Live voice)
+                        if sc.output_transcription and sc.output_transcription.text:
+                            tx = sc.output_transcription.text
+                            alex_latest_question += tx
+                            await websocket.send_json({"event": "ai_transcript_chunk", "text": tx})
 
-                        # Handle Interruption
+                        # 4. Finalize candidate turn when Alex starts speaking/responding
+                        if (sc.output_transcription or sc.model_turn) and candidate_transcript_buffer.strip():
+                            prev_speech = clean_candidate_transcript(candidate_transcript_buffer)
+                            candidate_transcript_buffer = ""
+                            if prev_speech and len(prev_speech) >= 3:
+                                asyncio.create_task(process_candidate_speech_turn(prev_speech))
+
+                        # 5. Handle Interruption
                         if sc.interrupted:
                             log_event("GEMINI_LIVE", "Alex was interrupted by candidate speech.")
                             await websocket.send_json({"event": "ai_interrupted"})
 
-                        # Handle Turn Completion
+                        # 6. Handle Turn Completion
                         if sc.turn_complete:
                             alex_finish_timestamp = time.time()
                             alex_turn_complete_event.set()

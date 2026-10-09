@@ -73,11 +73,16 @@ export default function App() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
+  const durationSecondsRef = useRef(0);
+  useEffect(() => {
+    durationSecondsRef.current = durationSeconds;
+  }, [durationSeconds]);
+
   // Process incoming WebSocket events from live_server.py
   const handleIncomingWsMessage = (msg) => {
     if (!msg || !msg.event) return;
 
-    const timeStr = formatDuration(durationSeconds);
+    const timeStr = formatDuration(durationSecondsRef.current);
 
     if (msg.event === 'session_started') {
       setSessionId(msg.session_id);
@@ -104,31 +109,71 @@ export default function App() {
     } else if (msg.event === 'ai_turn_start') {
       setIsAlexSpeaking(true);
       setPipelineStatus((p) => ({ ...p, question: 'active' }));
+      setConversationHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.type === 'ai' && last.isStreaming) return prev;
+        return [...prev, { type: 'ai', text: '', time: timeStr, isStreaming: true }];
+      });
     } else if (msg.event === 'ai_transcript_chunk') {
       setIsAlexSpeaking(true);
-      // Append or update last AI message
+      // Append or update streaming AI message
       setConversationHistory((prev) => {
         const last = prev[prev.length - 1];
         if (last && last.type === 'ai') {
           return [
             ...prev.slice(0, -1),
-            { ...last, text: last.text + msg.text }
+            { ...last, text: last.text + msg.text, isStreaming: true }
           ];
         } else {
-          return [...prev, { type: 'ai', text: msg.text, time: timeStr }];
+          return [...prev, { type: 'ai', text: msg.text, time: timeStr, isStreaming: true }];
         }
       });
     } else if (msg.event === 'turn_complete') {
       setIsAlexSpeaking(false);
+      setConversationHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.type === 'ai') {
+          return [...prev.slice(0, -1), { ...last, isStreaming: false }];
+        }
+        return prev;
+      });
       setPipelineStatus((p) => ({ ...p, candidateResponse: 'active' }));
     } else if (msg.event === 'candidate_transcript_chunk') {
-      // Streaming candidate words
+      // Real-time streaming candidate words from Gemini Live STT
+      const chunkText = msg.text || '';
+      if (!chunkText.trim()) return;
+      setConversationHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.type === 'candidate' && last.isStreaming) {
+          return [
+            ...prev.slice(0, -1),
+            { ...last, text: last.text + (last.text ? ' ' : '') + chunkText, isStreaming: true }
+          ];
+        } else {
+          return [
+            ...prev,
+            { type: 'candidate', text: chunkText, time: timeStr, isStreaming: true }
+          ];
+        }
+      });
     } else if (msg.event === 'candidate_transcript') {
-      setConversationHistory((prev) => [
-        ...prev,
-        { type: 'candidate', text: msg.text, time: timeStr },
-        { type: 'shadow_eval', progress: '65%', time: timeStr }
-      ]);
+      const finalText = msg.text || '';
+      setConversationHistory((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.type === 'candidate') {
+          return [
+            ...prev.slice(0, -1),
+            { ...last, text: finalText || last.text, isStreaming: false },
+            { type: 'shadow_eval', progress: '65%', time: timeStr }
+          ];
+        } else {
+          return [
+            ...prev,
+            { type: 'candidate', text: finalText, time: timeStr, isStreaming: false },
+            { type: 'shadow_eval', progress: '65%', time: timeStr }
+          ];
+        }
+      });
       setPipelineStatus({
         candidateResponse: 'done',
         shadowEval: 'active',
@@ -229,6 +274,32 @@ export default function App() {
       },
       onAudioPlayState: (isPlaying) => {
         setIsAlexSpeaking(isPlaying);
+      },
+      onCandidateSpeechChunk: (text, isFinal) => {
+        if (!text) return;
+        const timeStr = formatDuration(durationSecondsRef.current);
+        setConversationHistory((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.type === 'candidate' && last.isStreaming) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, text: text, isStreaming: !isFinal }
+            ];
+          } else if (last && last.type === 'candidate' && !isFinal) {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, text: text, isStreaming: true }
+            ];
+          } else {
+            return [
+              ...prev,
+              { type: 'candidate', text: text, time: timeStr, isStreaming: !isFinal }
+            ];
+          }
+        });
+      },
+      onCandidateSpeechFinal: (text) => {
+        // Speech turn finalized by browser speech recognition
       },
       onMessage: (msg) => {
         handleIncomingWsMessage(msg);

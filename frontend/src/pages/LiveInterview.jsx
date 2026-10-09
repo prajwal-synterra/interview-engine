@@ -167,7 +167,10 @@ export default function LiveInterview({
                     </div>
                     <div className="bubble-ai-body">
                       <div className="bubble-ai-title">Alex (AI Interviewer)</div>
-                      <div className="bubble-text">{item.text}</div>
+                      <div className="bubble-text">
+                        {item.text}
+                        {item.isStreaming && <span className="typing-cursor">▋</span>}
+                      </div>
                       <div className="bubble-timestamp">{item.time}</div>
                     </div>
                   </div>
@@ -180,7 +183,10 @@ export default function LiveInterview({
                         ? `You (${candidateName})`
                         : 'You (Candidate)'}
                     </div>
-                    <div className="bubble-text">{item.text}</div>
+                    <div className="bubble-text">
+                      {item.text}
+                      {item.isStreaming && <span className="typing-cursor">▋</span>}
+                    </div>
                     <div className="bubble-timestamp">{item.time}</div>
                   </div>
                 );
