@@ -1352,3 +1352,319 @@ input:checked + .slider:before {
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
 }
+
+/* ── Reports & Conversational Audit Styles ── */
+.report-exec-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.report-stat-group {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.report-stat-pill {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  min-width: 90px;
+}
+
+.report-stat-pill .label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.report-stat-pill .value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+/* Turn Audit Cards */
+.turn-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.turn-audit-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.turn-audit-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.turn-audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background-color: #F8FAFC;
+  border-bottom: 1px solid var(--border);
+}
+
+.turn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background-color: #0F172A;
+  color: #F8FAFC;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.turn-dialogue-container {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dialogue-bubble-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dialogue-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.dialogue-avatar.alex {
+  background: var(--blue-light);
+  color: var(--blue);
+  border: 1px solid var(--blue-border);
+}
+
+.dialogue-avatar.candidate {
+  background: var(--green-light);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+
+.dialogue-bubble {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dialogue-bubble.alex {
+  background-color: #F0F7FF;
+  border: 1px solid #BAE6FD;
+  color: #0C4A6E;
+}
+
+.dialogue-bubble.candidate {
+  background-color: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  color: #14532D;
+}
+
+.dialogue-speaker-name {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Shadow Scoring Box */
+.shadow-scoring-box {
+  margin: 0 16px 16px 16px;
+  padding: 14px;
+  background-color: #FAF5FF;
+  border: 1px solid #E9D5FF;
+  border-radius: var(--radius-md);
+}
+
+.shadow-scoring-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.shadow-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.shadow-metric-chip {
+  background: white;
+  border: 1px solid #E9D5FF;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.shadow-metric-chip .label {
+  font-size: 10px;
+  color: #6B21A8;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.shadow-metric-chip .value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.shadow-feedback-text {
+  font-size: 12.5px;
+  color: #4C1D95;
+  background: white;
+  border-left: 3px solid #9333EA;
+  padding: 8px 12px;
+  border-radius: 0 6px 6px 0;
+  line-height: 1.5;
+}
+
+/* Skills Evaluated Grid */
+.skills-evaluated-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.skill-eval-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.skill-eval-card.mastered {
+  border-left: 4px solid var(--green);
+}
+
+.skill-eval-card.competent {
+  border-left: 4px solid var(--blue);
+}
+
+.skill-eval-card.developing {
+  border-left: 4px solid var(--orange);
+}
+
+/* Markdown Formatted Content */
+.markdown-report-content {
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.markdown-report-content h1 {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.markdown-report-content h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
+.markdown-report-content h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+
+.markdown-report-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 12.5px;
+}
+
+.markdown-report-content th {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 700;
+}
+
+.markdown-report-content td {
+  border: 1px solid var(--border);
+  padding: 7px 12px;
+}
+
+.markdown-report-content blockquote {
+  border-left: 3px solid var(--blue);
+  background-color: var(--blue-light);
+  padding: 8px 14px;
+  margin: 12px 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text);
+}
+
+.markdown-report-content ul, .markdown-report-content ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.markdown-report-content li {
+  margin-bottom: 4px;
+}
+
+.markdown-report-content code {
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}

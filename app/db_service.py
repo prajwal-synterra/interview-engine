@@ -144,6 +144,8 @@ class DatabaseService:
                     bkt_prior FLOAT DEFAULT 0.0,
                     bkt_posterior FLOAT DEFAULT 0.0,
                     proctor_bii FLOAT DEFAULT 1.0,
+                    evaluator_feedback TEXT,
+                    scaffolding_level INT DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -202,6 +204,8 @@ class DatabaseService:
                         bkt_prior REAL DEFAULT 0.0,
                         bkt_posterior REAL DEFAULT 0.0,
                         proctor_bii REAL DEFAULT 1.0,
+                        evaluator_feedback TEXT,
+                        scaffolding_level INTEGER DEFAULT 0,
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (session_id) REFERENCES interview_sessions(session_id)
                     );
@@ -338,7 +342,9 @@ class DatabaseService:
         depth_score: float = 0.0,
         bkt_prior: float = 0.0,
         bkt_posterior: float = 0.0,
-        proctor_bii: float = 1.0
+        proctor_bii: float = 1.0,
+        evaluator_feedback: str = "",
+        scaffolding_level: int = 0
     ) -> str:
         """Logs turn-by-turn telemetry for forensic review."""
         turn_id = f"turn_{uuid.uuid4().hex[:12]}"
@@ -348,13 +354,15 @@ class DatabaseService:
                 INSERT INTO turn_telemetry_logs (
                     turn_id, session_id, turn_index, topic, interviewer_prompt,
                     candidate_transcript, latency_ms, evaluator_observation,
-                    depth_score, bkt_prior, bkt_posterior, proctor_bii
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                    depth_score, bkt_prior, bkt_posterior, proctor_bii,
+                    evaluator_feedback, scaffolding_level
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
             """
             await asyncio.to_thread(self._sync_pg_execute, query, (
                 turn_id, session_id, turn_index, topic, interviewer_prompt,
                 candidate_transcript, latency_ms, evaluator_observation,
-                depth_score, bkt_prior, bkt_posterior, proctor_bii
+                depth_score, bkt_prior, bkt_posterior, proctor_bii,
+                evaluator_feedback, scaffolding_level
             ))
         else:
             async with aiosqlite.connect(SQLITE_DB_PATH) as db:
@@ -362,11 +370,13 @@ class DatabaseService:
                     INSERT INTO turn_telemetry_logs (
                         turn_id, session_id, turn_index, topic, interviewer_prompt,
                         candidate_transcript, latency_ms, evaluator_observation,
-                        depth_score, bkt_prior, bkt_posterior, proctor_bii
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        depth_score, bkt_prior, bkt_posterior, proctor_bii,
+                        evaluator_feedback, scaffolding_level
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """, (turn_id, session_id, turn_index, topic, interviewer_prompt,
                       candidate_transcript, latency_ms, evaluator_observation,
-                      depth_score, bkt_prior, bkt_posterior, proctor_bii))
+                      depth_score, bkt_prior, bkt_posterior, proctor_bii,
+                      evaluator_feedback, scaffolding_level))
                 await db.commit()
 
         return turn_id
@@ -525,27 +535,53 @@ class DatabaseService:
                     return dict(row) if row else None
 
     async def get_all_reports(self) -> List[Dict[str, Any]]:
-        """Retrieves summary of all generated final reports joined with session metadata."""
+        """Retrieves summary of all candidate sessions with reports and turns count."""
         if not self.is_sqlite:
             query = """
-                SELECT r.report_id, r.session_id, r.hiring_verdict, r.average_mastery,
-                       r.proctor_integrity_score, r.generated_at,
-                       s.candidate_name, s.seniority_tier, s.detected_ecosystem
-                FROM final_reports r
-                LEFT JOIN interview_sessions s ON r.session_id = s.session_id
-                ORDER BY r.generated_at DESC;
+                SELECT 
+                    s.session_id,
+                    s.candidate_name,
+                    s.seniority_tier,
+                    s.detected_ecosystem,
+                    s.status,
+                    s.created_at,
+                    s.completed_at,
+                    r.report_id,
+                    COALESCE(r.hiring_verdict, CASE WHEN COUNT(t.turn_id) > 0 THEN 'EVALUATED' ELSE 'IN_PROGRESS' END) as hiring_verdict,
+                    COALESCE(r.average_mastery, 0.0) as average_mastery,
+                    COALESCE(r.proctor_integrity_score, 1.0) as proctor_integrity_score,
+                    r.generated_at,
+                    COUNT(t.turn_id) as turns_count
+                FROM interview_sessions s
+                LEFT JOIN final_reports r ON s.session_id = r.session_id
+                LEFT JOIN turn_telemetry_logs t ON s.session_id = t.session_id
+                GROUP BY s.session_id, s.candidate_name, s.seniority_tier, s.detected_ecosystem, s.status, s.created_at, s.completed_at, r.report_id, r.hiring_verdict, r.average_mastery, r.proctor_integrity_score, r.generated_at
+                ORDER BY s.created_at DESC;
             """
             return await asyncio.to_thread(self._sync_pg_execute, query, (), "all")
         else:
             async with aiosqlite.connect(SQLITE_DB_PATH) as db:
                 db.row_factory = aiosqlite.Row
                 async with db.execute("""
-                    SELECT r.report_id, r.session_id, r.hiring_verdict, r.average_mastery,
-                           r.proctor_integrity_score, r.generated_at,
-                           s.candidate_name, s.seniority_tier, s.detected_ecosystem
-                    FROM final_reports r
-                    LEFT JOIN interview_sessions s ON r.session_id = s.session_id
-                    ORDER BY r.generated_at DESC;
+                    SELECT 
+                        s.session_id,
+                        s.candidate_name,
+                        s.seniority_tier,
+                        s.detected_ecosystem,
+                        s.status,
+                        s.created_at,
+                        s.completed_at,
+                        r.report_id,
+                        COALESCE(r.hiring_verdict, CASE WHEN COUNT(t.turn_id) > 0 THEN 'EVALUATED' ELSE 'IN_PROGRESS' END) as hiring_verdict,
+                        COALESCE(r.average_mastery, 0.0) as average_mastery,
+                        COALESCE(r.proctor_integrity_score, 1.0) as proctor_integrity_score,
+                        r.generated_at,
+                        COUNT(t.turn_id) as turns_count
+                    FROM interview_sessions s
+                    LEFT JOIN final_reports r ON s.session_id = r.session_id
+                    LEFT JOIN turn_telemetry_logs t ON s.session_id = t.session_id
+                    GROUP BY s.session_id, s.candidate_name, s.seniority_tier, s.detected_ecosystem, s.status, s.created_at, s.completed_at, r.report_id, r.hiring_verdict, r.average_mastery, r.proctor_integrity_score, r.generated_at
+                    ORDER BY s.created_at DESC;
                 """) as cursor:
                     rows = await cursor.fetchall()
                     return [dict(r) for r in rows]

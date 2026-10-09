@@ -38,6 +38,28 @@ export async function fetchCompactedCards(sessionId) {
   }
 }
 
+export async function fetchSessionReport(sessionId) {
+  try {
+    const res = await fetch(`/api/reports/${sessionId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn(`Could not fetch full report for session ${sessionId}:`, err.message);
+    return null;
+  }
+}
+
+export async function generateSessionReport(sessionId) {
+  try {
+    const res = await fetch(`/api/reports/${sessionId}/generate`, { method: "POST" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn(`Could not generate report for session ${sessionId}:`, err.message);
+    return null;
+  }
+}
+
 export async function checkBackendHealth() {
   try {
     const res = await fetch("/health");

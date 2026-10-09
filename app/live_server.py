@@ -259,10 +259,159 @@ async def get_all_reports_list():
 
 @app.get("/api/reports/{session_id}")
 async def get_session_reports(session_id: str):
+    session = await db_service.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
     rep = await db_service.get_final_reports(session_id)
-    if rep:
-        return rep
-    raise HTTPException(status_code=404, detail="Reports not found for session")
+    turns = await db_service.get_turns(session_id)
+    cards = await db_service.get_compacted_topic_cards(session_id)
+
+    # Build evaluated skills analysis
+    skills_map = {}
+    intro_bp = session.get("intro_blueprint") or {}
+    matched_pillars = intro_bp.get("matched_pillars") or []
+    for p in matched_pillars:
+        if isinstance(p, dict):
+            pid = p.get("pillar_id") or p.get("pillarId")
+            if pid:
+                skills_map[pid] = {
+                    "pillar_id": pid,
+                    "name": p.get("name", pid),
+                    "domain": p.get("domain", "GENERAL"),
+                    "criticality": p.get("criticality", "HIGH"),
+                    "similarity": p.get("similarity", 0.0),
+                    "probe": p.get("probe", ""),
+                    "turns_count": 0,
+                    "final_mastery": 0.40,
+                    "status": "EVALUATED"
+                }
+
+    for c in cards:
+        tcode = c.get("topic_code")
+        if tcode:
+            if tcode not in skills_map:
+                skills_map[tcode] = {
+                    "pillar_id": tcode,
+                    "name": tcode.replace("_", " ").title(),
+                    "domain": "SYSTEM_DESIGN",
+                    "criticality": "HIGH",
+                    "turns_count": c.get("turns_spent", 0),
+                    "final_mastery": float(c.get("final_mastery_p_l", 0.4)),
+                    "status": c.get("status", "EVALUATED")
+                }
+            else:
+                skills_map[tcode]["final_mastery"] = float(c.get("final_mastery_p_l", 0.4))
+                skills_map[tcode]["status"] = c.get("status", "EVALUATED")
+                skills_map[tcode]["turns_count"] = c.get("turns_spent", 0)
+
+    for t in turns:
+        t_topic = t.get("topic")
+        if t_topic:
+            if t_topic not in skills_map:
+                skills_map[t_topic] = {
+                    "pillar_id": t_topic,
+                    "name": t_topic.replace("_", " ").title(),
+                    "domain": "SYSTEM_DESIGN",
+                    "criticality": "HIGH",
+                    "turns_count": 0,
+                    "final_mastery": float(t.get("bkt_posterior", 0.4)),
+                    "status": "EVALUATED"
+                }
+            skills_map[t_topic]["turns_count"] = skills_map[t_topic].get("turns_count", 0) + 1
+            skills_map[t_topic]["final_mastery"] = float(t.get("bkt_posterior", skills_map[t_topic].get("final_mastery", 0.4)))
+            if skills_map[t_topic]["final_mastery"] >= 0.85:
+                skills_map[t_topic]["status"] = "MASTERED"
+            elif skills_map[t_topic]["final_mastery"] >= 0.60:
+                skills_map[t_topic]["status"] = "COMPETENT"
+            else:
+                skills_map[t_topic]["status"] = "DEVELOPING"
+
+    skills_evaluated = list(skills_map.values())
+
+    return {
+        "session": session,
+        "report": rep or {},
+        "skills_evaluated": skills_evaluated,
+        "turns": turns,
+        "cards": cards
+    }
+
+@app.post("/api/reports/{session_id}/generate")
+async def generate_report_for_session(session_id: str):
+    session = await db_service.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    turns = await db_service.get_turns(session_id)
+    if not turns:
+        raise HTTPException(status_code=400, detail="Cannot generate report: No turns logged for this session.")
+
+    cand_name = session.get("candidate_name") or "Candidate"
+    level = session.get("seniority_tier") or "HARD"
+    intro_bp = session.get("intro_blueprint") or {}
+    eco_summary = intro_bp.get("ecosystem_summary") or {"primary_ecosystem": session.get("detected_ecosystem") or "GENERAL_SYSTEMS"}
+
+    skills_mastery = {}
+    for t in turns:
+        topic = t.get("topic")
+        if topic:
+            skills_mastery[topic] = float(t.get("bkt_posterior", 0.65))
+    if not skills_mastery:
+        skills_mastery = {"SYSTEM_DESIGN": 0.65}
+
+    scaffolding_events = [{"level": t.get("scaffolding_level", 0)} for t in turns]
+    last_turn = turns[-1] if turns else {}
+    proctor_bii = float(last_turn.get("proctor_bii", 1.0))
+    scoring = calculate_master_score(skills_mastery, scaffolding_events, proctor_bii, None)
+
+    avg_obs = sum(t.get("evaluator_observation", 1) for t in turns) / len(turns)
+    mirt_radar = [
+        {"dimension": "Logic & Algorithms", "theta": round(avg_obs * 1.2 - 0.2, 2), "std_error": 0.35, "percentile": round(min(99.0, max(10.0, avg_obs * 90.0)), 1), "tier": "Mastered" if avg_obs > 0.8 else "Competent"},
+        {"dimension": "System Design & Architecture", "theta": round(avg_obs * 1.5 - 0.3, 2), "std_error": 0.30, "percentile": round(min(99.0, max(15.0, avg_obs * 92.0)), 1), "tier": "Mastered" if avg_obs > 0.8 else "Competent"},
+        {"dimension": "Runtime Ecosystem & Memory", "theta": round(avg_obs * 1.1, 2), "std_error": 0.40, "percentile": round(min(99.0, max(10.0, avg_obs * 85.0)), 1), "tier": "Competent"},
+        {"dimension": "Problem Solving & Autonomy", "theta": round(1.0 - (sum(s['level'] for s in scaffolding_events) * 0.1), 2), "std_error": 0.25, "percentile": 80.0, "tier": "Competent"},
+        {"dimension": "Production Concurrency & Rigor", "theta": round(avg_obs * 1.3 - 0.1, 2), "std_error": 0.35, "percentile": 84.0, "tier": "Competent"}
+    ]
+
+    evaluator_md = generate_evaluator_report(
+        session_id=session_id,
+        candidate_name=cand_name,
+        seniority_level=level,
+        turns_history=turns,
+        skills_mastery=skills_mastery,
+        proctor_bii=proctor_bii,
+        mirt_radar=mirt_radar,
+        ecosystem_info=eco_summary,
+        devils_advocate_results=None
+    )
+
+    student_md = await generate_student_report(
+        candidate_name=cand_name,
+        seniority_level=level,
+        turns_history=turns,
+        skills_mastery=skills_mastery,
+        mirt_radar=mirt_radar,
+        ecosystem_info=eco_summary
+    )
+
+    save_reports_to_disk(session_id, student_md, evaluator_md)
+
+    await db_service.save_final_reports(
+        session_id=session_id,
+        student_compass_markdown=student_md,
+        evaluator_audit_markdown=evaluator_md,
+        hiring_verdict=scoring["verdict"],
+        average_mastery=scoring["base_technical"],
+        proctor_integrity_score=proctor_bii
+    )
+
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "hiring_verdict": scoring["verdict"],
+        "evaluator_report": evaluator_md,
+        "student_report": student_md
+    }
 
 @app.get("/api/session/{session_id}/compacted-cards")
 async def get_session_compacted_cards(session_id: str):
@@ -622,6 +771,7 @@ async def websocket_interview(websocket: WebSocket):
 
                 # 5. Persist Turn Telemetry to PostgreSQL
                 turn_idx = len(turns_history) + 1
+                eval_summary = eval_res.get("summary", "")
                 await db_service.log_turn_telemetry(
                     session_id=session_id,
                     turn_index=turn_idx,
@@ -633,7 +783,9 @@ async def websocket_interview(websocket: WebSocket):
                     depth_score=depth,
                     bkt_prior=prior_val,
                     bkt_posterior=post_val,
-                    proctor_bii=proctor.bii
+                    proctor_bii=proctor.bii,
+                    evaluator_feedback=eval_summary,
+                    scaffolding_level=policy_router.current_scaffolding_level
                 )
 
                 # Record turn in local history
@@ -644,8 +796,11 @@ async def websocket_interview(websocket: WebSocket):
                     "candidate_answer": user_text,
                     "observation": obs,
                     "scaffolding_level": policy_router.current_scaffolding_level,
+                    "depth_score": depth,
+                    "bkt_prior": prior_val,
                     "bkt_posterior": post_val,
                     "latency_ms": latency_ms,
+                    "evaluator_feedback": eval_summary,
                     "proctor_flags": [f.flag_type for f in proctor.flags]
                 })
 
