@@ -19,53 +19,44 @@ export default function App() {
 
   // Session State
   const [sessionId, setSessionId] = useState('sess_2025_09_30_1745_001');
-  const [isWsConnected, setIsWsConnected] = useState(true);
-  const [wsLatency, setWsLatency] = useState('0.8ms');
-  const [isInterviewRunning, setIsInterviewRunning] = useState(true);
+  const [isWsConnected, setIsWsConnected] = useState(false);
+  const [wsLatency, setWsLatency] = useState('—');
+  const [isInterviewRunning, setIsInterviewRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [durationSeconds, setDurationSeconds] = useState(272); // 04:32
+  const [durationSeconds, setDurationSeconds] = useState(0);
   const [isAlexSpeaking, setIsAlexSpeaking] = useState(false);
+  const [isRecordingMic, setIsRecordingMic] = useState(false);
 
   // Dialogue Thread
   const [conversationHistory, setConversationHistory] = useState([
     {
       type: 'ai',
-      text: 'How would you design a scalable real-time chat application?',
-      time: '04:12'
-    },
-    {
-      type: 'candidate',
-      text: 'I would use WebSockets for bidirectional communication and a load balancer to distribute connections.',
-      time: '04:28'
-    },
-    {
-      type: 'shadow_eval',
-      progress: '68%',
-      time: '04:30'
+      text: 'Click "Start" in the top bar to begin your live technical interview with Alex.',
+      time: '00:00'
     }
   ]);
 
   // Telemetry & Engines State
   const [telemetry, setTelemetry] = useState({
-    phase: 'DEEP_DIVE',
+    phase: 'INTRO',
     fsmState: 'QUESTION',
     role: 'Interviewer',
-    activeTopic: 'System Design',
+    activeTopic: 'SYSTEM_DESIGN',
     difficulty: 'Medium',
-    bktMastery: 0.72,
+    bktMastery: 0.40,
     mirt: {
-      logic: 0.68,
-      system_design: 0.61,
-      language: 0.74,
-      problem_solving: 0.62,
-      coding: 0.58
+      logic: 0.50,
+      system_design: 0.50,
+      language: 0.50,
+      problem_solving: 0.50,
+      coding: 0.50
     },
-    policyDirective: 'DEEPEN',
+    policyDirective: 'EXPLORE',
     masterScore: '—'
   });
 
   const [pipelineStatus, setPipelineStatus] = useState({
-    candidateResponse: 'active',
+    candidateResponse: 'pending',
     shadowEval: 'pending',
     bkt: 'pending',
     mirt: 'pending',
@@ -73,37 +64,6 @@ export default function App() {
   });
 
   const wsClientRef = useRef(null);
-
-  // Initialize WebSocket connection to FastAPI
-  useEffect(() => {
-    const ws = new InterviewWebSocket({
-      onStatusChange: ({ connected, latency }) => {
-        setIsWsConnected(connected);
-        setWsLatency(latency);
-      },
-      onMessage: (msg) => {
-        handleIncomingWsMessage(msg);
-      }
-    });
-
-    ws.connect('Alex Vance', 'HARD');
-    wsClientRef.current = ws;
-
-    return () => {
-      ws.disconnect();
-    };
-  }, []);
-
-  // Format Duration timer mm:ss
-  useEffect(() => {
-    let timer;
-    if (isInterviewRunning && !isPaused) {
-      timer = setInterval(() => {
-        setDurationSeconds((s) => s + 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [isInterviewRunning, isPaused]);
 
   const formatDuration = (totalSeconds) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -119,8 +79,13 @@ export default function App() {
 
     if (msg.event === 'session_started') {
       setSessionId(msg.session_id);
+      setActivityTimeline((prev) => [
+        ...prev,
+        { time: timeStr, text: `Session started (${msg.session_id})` }
+      ]);
     } else if (msg.event === 'ai_turn_start') {
       setIsAlexSpeaking(true);
+      setPipelineStatus((p) => ({ ...p, question: 'active' }));
     } else if (msg.event === 'ai_transcript_chunk') {
       setIsAlexSpeaking(true);
       // Append or update last AI message
@@ -138,11 +103,13 @@ export default function App() {
     } else if (msg.event === 'turn_complete') {
       setIsAlexSpeaking(false);
       setPipelineStatus((p) => ({ ...p, candidateResponse: 'active' }));
+    } else if (msg.event === 'candidate_transcript_chunk') {
+      // Streaming candidate words
     } else if (msg.event === 'candidate_transcript') {
       setConversationHistory((prev) => [
         ...prev,
         { type: 'candidate', text: msg.text, time: timeStr },
-        { type: 'shadow_eval', progress: '85%', time: timeStr }
+        { type: 'shadow_eval', progress: '65%', time: timeStr }
       ]);
       setPipelineStatus({
         candidateResponse: 'done',
@@ -151,13 +118,52 @@ export default function App() {
         mirt: 'pending',
         policy: 'pending'
       });
+      setActivityTimeline((prev) => [
+        ...prev,
+        { time: timeStr, text: 'Candidate answer submitted' },
+        { time: timeStr, text: 'Shadow Evaluator grading response...' }
+      ]);
+    } else if (msg.event === 'shadow_eval_completed') {
+      const depthPct = Math.round((msg.depth_score || 0.65) * 100);
+      setConversationHistory((prev) =>
+        prev.map((item) =>
+          item.type === 'shadow_eval'
+            ? {
+                ...item,
+                progress: `${depthPct}%`,
+                obs: msg.observation,
+                depth: depthPct,
+                summary: msg.summary || `Observation: ${msg.observation} | Depth: ${depthPct}%`
+              }
+            : item
+        )
+      );
+      setActivityTimeline((prev) => [
+        ...prev,
+        { time: timeStr, text: `Shadow Evaluator: Obs=${msg.observation}, Depth=${depthPct}%` }
+      ]);
+      setPipelineStatus((p) => ({ ...p, shadowEval: 'done', bkt: 'active' }));
+    } else if (msg.event === 'policy_directive_selected') {
+      setTelemetry((prev) => ({
+        ...prev,
+        policyDirective: msg.action,
+        fsmState: msg.fsm_state
+      }));
+      setActivityTimeline((prev) => [
+        ...prev,
+        { time: timeStr, text: `Policy Router: ${msg.action} (${msg.fsm_state})` }
+      ]);
+      setPipelineStatus((p) => ({ ...p, bkt: 'done', mirt: 'done', policy: 'done' }));
     } else if (msg.event === 'telemetry_update' && msg.telemetry) {
       const t = msg.telemetry;
       setTelemetry((prev) => ({
         ...prev,
-        bktMastery: t.bkt_mastery ?? prev.bktMastery,
-        activeTopic: t.active_topic ?? prev.activeTopic,
-        phase: t.session_phase ?? prev.phase,
+        bktMastery: t.bkt_mastery !== undefined ? t.bkt_mastery : prev.bktMastery,
+        activeTopic: t.active_topic || t.current_skill || prev.activeTopic,
+        phase: t.session_phase || prev.phase,
+        fsmState: t.fsm_state || prev.fsmState,
+        policyDirective: t.policy_directive || prev.policyDirective,
+        difficulty: t.difficulty || prev.difficulty,
         mirt: t.mirt_radar
           ? {
               logic: t.mirt_radar.algorithms ?? 0.68,
@@ -178,8 +184,45 @@ export default function App() {
       }
     } else if (msg.event === 'reports_generated') {
       setTelemetry((prev) => ({ ...prev, masterScore: msg.hiring_verdict || 'HIRE' }));
+      setActivityTimeline((prev) => [
+        ...prev,
+        { time: timeStr, text: `Final Dual Assessment Reports generated: ${msg.hiring_verdict}` }
+      ]);
     }
   };
+
+  // Format Duration timer mm:ss
+  useEffect(() => {
+    let timer;
+    if (isInterviewRunning && !isPaused) {
+      timer = setInterval(() => {
+        setDurationSeconds((s) => s + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isInterviewRunning, isPaused]);
+
+  // Connect on Mount or on Demand
+  useEffect(() => {
+    const ws = new InterviewWebSocket({
+      onStatusChange: ({ connected, latency }) => {
+        setIsWsConnected(connected);
+        setWsLatency(latency);
+      },
+      onAudioPlayState: (isPlaying) => {
+        setIsAlexSpeaking(isPlaying);
+      },
+      onMessage: (msg) => {
+        handleIncomingWsMessage(msg);
+      }
+    });
+
+    wsClientRef.current = ws;
+
+    return () => {
+      ws.disconnect();
+    };
+  }, []);
 
   // Handle Candidate text input
   const handleSendCandidateMessage = (text) => {
@@ -218,9 +261,31 @@ export default function App() {
     }
   };
 
+  const handleToggleMic = async () => {
+    if (!isRecordingMic) {
+      if (wsClientRef.current && wsClientRef.current.isConnected) {
+        const ok = await wsClientRef.current.startMicrophone();
+        if (ok) setIsRecordingMic(true);
+      } else {
+        setIsRecordingMic(true);
+      }
+    } else {
+      if (wsClientRef.current && wsClientRef.current.isConnected) {
+        wsClientRef.current.stopMicrophone();
+      }
+      setIsRecordingMic(false);
+    }
+  };
+
   const handleStartSession = () => {
     setIsInterviewRunning(true);
     setIsPaused(false);
+    setDurationSeconds(0);
+    setConversationHistory([]);
+    setActivityTimeline([
+      { time: '00:00', text: 'Interview session starting...' },
+      { time: '00:00', text: 'Connecting to Alex (Gemini Live)...' }
+    ]);
     if (wsClientRef.current) {
       wsClientRef.current.connect('Alex Vance', 'HARD');
     }
@@ -270,6 +335,8 @@ export default function App() {
               features={features}
               setFeatures={setFeatures}
               onSendCandidateMessage={handleSendCandidateMessage}
+              onToggleMic={handleToggleMic}
+              isRecordingMic={isRecordingMic}
               conversationHistory={conversationHistory}
               activityTimeline={activityTimeline}
               pipelineStatus={pipelineStatus}

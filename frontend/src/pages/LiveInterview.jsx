@@ -18,6 +18,8 @@ export default function LiveInterview({
   features,
   setFeatures,
   onSendCandidateMessage,
+  onToggleMic,
+  isRecordingMic,
   conversationHistory,
   activityTimeline,
   pipelineStatus,
@@ -26,7 +28,6 @@ export default function LiveInterview({
   isAlexSpeaking
 }) {
   const [inputText, setInputText] = useState('');
-  const [isRecordingMic, setIsRecordingMic] = useState(false);
   const [activeDebugTab, setActiveDebugTab] = useState('system');
   const chatScrollRef = useRef(null);
 
@@ -153,7 +154,7 @@ export default function LiveInterview({
                         <div>
                           <div className="shadow-eval-name">Shadow Evaluator</div>
                           <div className="shadow-eval-desc">
-                            Processing response... Analyzing for rubric match, depth, and skills.
+                            {item.summary || 'Processing response... Analyzing for rubric match, depth, and skills.'}
                           </div>
                         </div>
                       </div>
@@ -179,7 +180,7 @@ export default function LiveInterview({
             <button
               type="button"
               className={`btn-mic ${isRecordingMic ? 'recording' : ''}`}
-              onClick={() => setIsRecordingMic(!isRecordingMic)}
+              onClick={onToggleMic}
               title={isRecordingMic ? 'Stop microphone' : 'Start microphone'}
             >
               <Mic size={18} />

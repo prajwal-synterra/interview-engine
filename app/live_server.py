@@ -324,6 +324,7 @@ async def websocket_interview(websocket: WebSocket):
 
     async def broadcast_telemetry(active_module: str = ""):
         try:
+            curr_fsm = policy_router.state.value if hasattr(policy_router, 'state') else "QUESTION"
             await websocket.send_json({
                 "event": "telemetry_update",
                 "active_module": active_module,
@@ -332,6 +333,7 @@ async def websocket_interview(websocket: WebSocket):
                     "session_id": session_id,
                     "active_topic": active_topic,
                     "session_phase": session_phase,
+                    "fsm_state": curr_fsm,
                     "mirt_radar": get_radar_summary(mirt)
                 }
             })
@@ -471,6 +473,16 @@ async def websocket_interview(websocket: WebSocket):
                 est_diff = eval_res.get("estimated_difficulty", 0.4)
                 log_shadow_eval(len(turns_history) + 1, curr_skill, obs, depth, eval_res.get("summary", ""))
 
+                # Send real-time Shadow Evaluator result to frontend
+                await websocket.send_json({
+                    "event": "shadow_eval_completed",
+                    "observation": obs,
+                    "depth_score": depth,
+                    "estimated_difficulty": est_diff,
+                    "summary": eval_res.get("summary", ""),
+                    "skill": curr_skill
+                })
+
                 # 2. Behavioral Proctor (BII Anti-Cheat)
                 await broadcast_telemetry("Behavioral Proctor")
                 proctor_turn = proctor.record_turn(
@@ -492,6 +504,16 @@ async def websocket_interview(websocket: WebSocket):
                     estimated_difficulty=est_diff
                 )
                 log_policy(prev_state, policy_router.state.value, directive.action, directive.prompt_directive)
+                telemetry["policy_directive"] = directive.action
+                telemetry["fsm_state"] = policy_router.state.value
+
+                # Send real-time Policy Router decision to frontend
+                await websocket.send_json({
+                    "event": "policy_directive_selected",
+                    "action": directive.action,
+                    "fsm_state": policy_router.state.value,
+                    "directive": directive.prompt_directive
+                })
 
                 # 4. MIRT Ability Calibration
                 mirt.update_ability(

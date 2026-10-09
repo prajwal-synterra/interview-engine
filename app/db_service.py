@@ -75,7 +75,10 @@ class DatabaseService:
         )
         try:
             cur = conn.cursor()
-            cur.execute(query, params)
+            if params is not None:
+                cur.execute(query, params)
+            else:
+                cur.execute(query)
             if fetch == "one":
                 row = cur.fetchone()
                 if row and cur.description:
@@ -535,7 +538,7 @@ class DatabaseService:
                 LEFT JOIN interview_sessions s ON r.session_id = s.session_id
                 ORDER BY r.generated_at DESC;
             """
-            return await asyncio.to_thread(self._sync_pg_execute, query, None, "all")
+            return await asyncio.to_thread(self._sync_pg_execute, query, (), "all")
         else:
             async with aiosqlite.connect(SQLITE_DB_PATH) as db:
                 db.row_factory = aiosqlite.Row
