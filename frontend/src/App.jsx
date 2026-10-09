@@ -295,17 +295,26 @@ export default function App() {
     }
   };
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
     setIsInterviewRunning(true);
     setIsPaused(false);
     setDurationSeconds(0);
     setConversationHistory([]);
     setActivityTimeline([
-      { time: '00:00', text: 'Interview session starting...' },
+      { time: '00:00', text: 'Interview session starting (Hands-free mode)...' },
       { time: '00:00', text: 'Connecting to Alex (Gemini Live)...' }
     ]);
     if (wsClientRef.current) {
       wsClientRef.current.connect('', 'HARD');
+      // Automatically activate microphone for completely hands-free voice conversation
+      const micOk = await wsClientRef.current.startMicrophone();
+      if (micOk) {
+        setIsRecordingMic(true);
+        setActivityTimeline((prev) => [
+          ...prev,
+          { time: '00:00', text: 'Microphone active — hands-free voice mode enabled' }
+        ]);
+      }
     }
   };
 
@@ -321,6 +330,8 @@ export default function App() {
 
   const handleEndSession = () => {
     setIsInterviewRunning(false);
+    setIsRecordingMic(false);
+    wsClientRef.current?.stopMicrophone();
     wsClientRef.current?.finish();
   };
 

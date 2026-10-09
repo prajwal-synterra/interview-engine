@@ -408,7 +408,7 @@ async def websocket_interview(websocket: WebSocket):
         output_audio_transcription=types.AudioTranscriptionConfig(),
         system_instruction=types.Content(parts=[types.Part.from_text(text=system_instruction)]),
         realtime_input_config=types.RealtimeInputConfig(
-            automatic_activity_detection=types.AutomaticActivityDetection(disabled=True)
+            automatic_activity_detection=types.AutomaticActivityDetection(disabled=False)
         )
     )
 
@@ -450,6 +450,13 @@ async def websocket_interview(websocket: WebSocket):
 
                         # Handle Alex Spoken Response
                         if sc.model_turn:
+                            # If candidate was speaking over mic, immediately process their speech in the background without waiting
+                            if candidate_transcript_buffer and candidate_transcript_buffer.strip():
+                                prev_speech = clean_candidate_transcript(candidate_transcript_buffer)
+                                candidate_transcript_buffer = ""
+                                if prev_speech and len(prev_speech) >= 3:
+                                    asyncio.create_task(process_candidate_speech_turn(prev_speech))
+
                             for part in sc.model_turn.parts:
                                 if part.inline_data and part.inline_data.data:
                                     # Forward raw PCM audio bytes to browser
@@ -634,6 +641,83 @@ async def websocket_interview(websocket: WebSocket):
 
                 await broadcast_telemetry("Turn Complete")
 
+            # ── Background Intro Blueprint Pipeline ──
+            async def run_intro_blueprint_background(speech_text: str, cand_name: str):
+                nonlocal matched_pillars, ecosystem_summary, pillar_ecosystem_map, active_topic
+                try:
+                    vector_res = await match_candidate_topics(speech_text)
+                    if isinstance(vector_res, dict):
+                        matched_pillars = vector_res.get("matched_pillars", [])
+                    elif isinstance(vector_res, list):
+                        matched_pillars = vector_res
+                    else:
+                        matched_pillars = []
+
+                    eco_res = detect_ecosystems_from_intro(speech_text)
+                    ecosystem_summary = eco_res if isinstance(eco_res, dict) else {}
+                    pillar_ecosystem_map = bind_pillars_to_ecosystems(matched_pillars, speech_text)
+
+                    # Dynamic Knowledge Graph nodes
+                    dynamic_graph = policy_router.graph
+                    for p in matched_pillars:
+                        pid = p.get("pillar_id") or p.get("pillarId") if isinstance(p, dict) else None
+                        if pid and pid not in dynamic_graph.nodes:
+                            domain_val = p.get("domain", "") if isinstance(p, dict) else ""
+                            dynamic_graph.add_skill(pid, description=domain_val)
+
+                    if matched_pillars and isinstance(matched_pillars[0], dict):
+                        first_p = matched_pillars[0]
+                        active_topic = first_p.get("pillar_id") or first_p.get("pillarId") or "SYSTEM_DESIGN"
+                        policy_router.current_skill = active_topic
+
+                    # Persist blueprint to DB
+                    await db_service.update_session_blueprint(
+                        session_id=session_id,
+                        intro_blueprint={
+                            "intro_text": speech_text,
+                            "candidate_name": cand_name,
+                            "matched_pillars": matched_pillars,
+                            "pillar_ecosystem_map": pillar_ecosystem_map,
+                            "ecosystem_summary": ecosystem_summary
+                        },
+                        detected_ecosystem=ecosystem_summary.get("primary_ecosystem", "GENERAL_SYSTEMS") if isinstance(ecosystem_summary, dict) else "GENERAL_SYSTEMS",
+                        candidate_name=cand_name
+                    )
+                    log_event("INTRO_BLUEPRINT", f"Intro blueprint saved for {cand_name}, initial topic: {active_topic}")
+                except Exception as e:
+                    log_event("INTRO_BLUEPRINT_ERROR", f"Error in background blueprint: {e}")
+
+            # ── Unified Asynchronous Candidate Speech Processor ──
+            async def process_candidate_speech_turn(speech_text: str):
+                nonlocal session_phase, candidate_name, active_topic, alex_latest_question
+                try:
+                    if not speech_text or len(speech_text.strip()) < 3:
+                        return
+
+                    log_speech("Candidate", speech_text)
+                    await websocket.send_json({"event": "candidate_transcript", "text": speech_text})
+
+                    if session_phase == "INTRO":
+                        log_event("INTRO_PROCESSING", "Processing candidate introduction via voice.")
+                        extracted = extract_candidate_name_from_intro(speech_text)
+                        if extracted:
+                            candidate_name = extracted
+                            ACTIVE_SESSIONS[session_id]["candidate_name"] = candidate_name
+                            log_event("NAME_IDENTIFIED", f"Identified candidate name: {candidate_name}")
+                            await websocket.send_json({"event": "candidate_name_updated", "name": candidate_name})
+
+                        session_phase = "DEEP_DIVE"
+                        asyncio.create_task(run_intro_blueprint_background(speech_text, candidate_name))
+
+                    elif session_phase == "DEEP_DIVE":
+                        # Launch Shadow Evaluator asynchronously in the background (~1.5s)
+                        # Does NOT pause or block voice communication!
+                        q_asked = alex_latest_question or "Active architectural question."
+                        asyncio.create_task(run_shadow_pipeline(speech_text, q_asked))
+
+                except Exception as e:
+                    log_event("SPEECH_TURN_ERROR", f"Error in process_candidate_speech_turn: {e}")
+
             # ── Main WebSocket Incoming Message Loop ──
             while True:
                 msg = await websocket.receive()
@@ -668,123 +752,29 @@ async def websocket_interview(websocket: WebSocket):
                         log_event("INTERVIEW_FINISH", "Candidate triggered finish interview.")
                         break
 
-                    # Candidate Finished Speaking (either via mic end_of_speech or manual text submit)
-                    raw_text = data.get("transcript") or data.get("text") or candidate_transcript_buffer
-                    candidate_transcript_buffer = ""
+                    # Candidate Finished Speaking via manual text submit
+                    raw_text = data.get("transcript") or data.get("text")
+                    if raw_text and raw_text.strip():
+                        user_text = clean_candidate_transcript(raw_text)
+                        if user_text and len(user_text.strip()) >= 3:
+                            # Stop in-flight audio if playing
+                            await websocket.send_json({"event": "ai_interrupted"})
 
-                    # Ensure any in-flight Alex audio in browser is stopped upon candidate speech
-                    await websocket.send_json({"event": "ai_interrupted"})
+                            # Process in background without waiting
+                            asyncio.create_task(process_candidate_speech_turn(user_text))
 
-                    user_text = clean_candidate_transcript(raw_text)
-                    if not user_text or len(user_text.strip()) < 3:
-                        continue
-
-                    log_speech("Candidate", user_text)
-                    await websocket.send_json({"event": "candidate_transcript", "text": user_text})
-
-                    # ── Phase 1: INTRO ──
-                    if session_phase == "INTRO":
-                        offtopic = check_for_offtopic_candidate_prompts(user_text)
-                        if offtopic:
-                            log_event("INTRO_OFFTOPIC", "Candidate asked off-topic question during intro.")
+                            # Send prompt to Gemini Live session
+                            offtopic_guard = check_for_offtopic_candidate_prompts(user_text) or ""
                             prompt_payload = (
-                                f"The candidate said: '{user_text}'.\n"
-                                f"{offtopic}\n"
-                                f"Do NOT answer their off-topic inquiry. As Alex, warmly and politely deflect: "
-                                f"remind them that you are conducting their technical interview today, and ask them what name they go by, "
-                                f"along with a brief introduction of their technical stack and engineering systems they have built. "
-                                f"Keep your spoken response natural and conversational (2 sentences max)."
+                                f"The candidate answered: '{user_text}'.\n"
+                                f"{offtopic_guard}\n"
+                                f"[Candidate: {candidate_name}, Active Topic: {active_topic}]\n"
+                                f"Respond Socratically as Alex the interviewer in natural spoken English (2-3 sentences max). Never use Markdown or bullets."
                             )
                             await session.send_client_content(
                                 turns=[types.Content(role="user", parts=[types.Part.from_text(text=prompt_payload)])]
                             )
                             await websocket.send_json({"event": "ai_turn_start"})
-                            continue
-
-                        log_event("INTRO_PROCESSING", "Processing candidate introduction.")
-
-                        # Extract name if mentioned by candidate in introduction
-                        extracted_name = extract_candidate_name_from_intro(user_text)
-                        if extracted_name:
-                            candidate_name = extracted_name
-                            ACTIVE_SESSIONS[session_id]["candidate_name"] = candidate_name
-                            log_event("NAME_IDENTIFIED", f"Identified candidate name: {candidate_name}")
-                            await websocket.send_json({"event": "candidate_name_updated", "name": candidate_name})
-
-                        vector_res = await match_candidate_topics(user_text)
-                        matched_pillars = vector_res.get("matched_pillars", [])
-
-                        eco_res = detect_ecosystems_from_intro(user_text)
-                        ecosystem_summary = eco_res
-                        pillar_ecosystem_map = bind_pillars_to_ecosystems(matched_pillars, user_text)
-
-                        # Build Dynamic Knowledge Graph
-                        dynamic_graph = policy_router.graph
-                        for p in matched_pillars:
-                            pid = p["pillar_id"]
-                            if pid not in dynamic_graph.nodes:
-                                dynamic_graph.add_skill(pid, description=p.get("domain", ""))
-
-                        active_topic = matched_pillars[0]["pillar_id"] if matched_pillars else "SYSTEM_DESIGN"
-                        policy_router.current_skill = active_topic
-
-                        # Persist Session Blueprint to DB
-                        await db_service.update_session_blueprint(
-                            session_id=session_id,
-                            intro_blueprint={
-                                "intro_text": user_text,
-                                "candidate_name": candidate_name,
-                                "matched_pillars": matched_pillars,
-                                "pillar_ecosystem_map": pillar_ecosystem_map,
-                                "ecosystem_summary": ecosystem_summary
-                            },
-                            detected_ecosystem=ecosystem_summary.get("primary_ecosystem", "GENERAL_SYSTEMS"),
-                            candidate_name=candidate_name
-                        )
-
-                        session_phase = "DEEP_DIVE"
-                        eco_dir = get_ecosystem_directive(active_topic, pillar_ecosystem_map)
-
-                        prompt_payload = (
-                            f"The candidate introduced themselves as: '{user_text}'.\n"
-                            f"Politely address them by their name '{candidate_name}'. "
-                            f"Acknowledge their background and transition smoothly into their first technical topic: {active_topic}.\n"
-                            f"{eco_dir}\n"
-                            f"Ask an engaging open-ended architectural question on {active_topic} to kick off the deep dive. "
-                            f"Keep your spoken response to 2-3 natural sentences. Do not use Markdown formatting, asterisks, or code blocks in speech."
-                        )
-
-                    # ── Phase 2: DEEP_DIVE ──
-                    elif session_phase == "DEEP_DIVE":
-                        question_asked = alex_latest_question
-                        alex_latest_question = ""
-                        asyncio.create_task(run_shadow_pipeline(user_text, question_asked))
-
-                        offtopic_guard = check_for_offtopic_candidate_prompts(user_text) or ""
-                        eco_dir = get_ecosystem_directive(active_topic, pillar_ecosystem_map)
-
-                        prompt_payload = (
-                            f"The candidate {candidate_name} answered: '{user_text}'.\n"
-                            f"{offtopic_guard}\n"
-                            f"[ACTIVE TOPIC: {active_topic}]\n"
-                            f"{eco_dir}\n"
-                            f"Respond Socratically as Alex the interviewer, addressing {candidate_name} naturally when appropriate. "
-                            f"If they asked an off-topic question, joke, or riddle, do NOT answer it—deflect politely with professional warmth and bring {candidate_name} back to {active_topic}. "
-                            f"Keep your spoken response concise (2-3 sentences max). Never use Markdown or bullet points."
-                        )
-
-                    # ── Phase 3: WRAPPING_UP ──
-                    else:
-                        prompt_payload = (
-                            f"The candidate answered: '{user_text}'.\n"
-                            "Warmly conclude the interview. Thank them for their time and technical insights."
-                        )
-
-                    # Send next prompt payload to Alex
-                    await session.send_client_content(
-                        turns=[types.Content(role="user", parts=[types.Part.from_text(text=prompt_payload)])]
-                    )
-                    await websocket.send_json({"event": "ai_turn_start"})
 
             # Clean up loops
             _mic_queue.put_nowait(None)

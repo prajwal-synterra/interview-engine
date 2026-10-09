@@ -132,11 +132,6 @@ export default function LiveInterview({
                   <Zap size={13} />
                   <span>Alex Listening</span>
                 </div>
-              ) : isRecordingMic ? (
-                <div className="pill-status red">
-                  <div className="status-dot-pulse red" style={{ width: 6, height: 6 }} />
-                  <span>{candidateName || 'Candidate'} Speaking...</span>
-                </div>
               ) : isAlexSpeaking ? (
                 <div className="pill-status blue">
                   <Volume2 size={13} />
@@ -146,6 +141,11 @@ export default function LiveInterview({
                 <div className="pill-status purple">
                   <Sparkles size={13} />
                   <span>Evaluating Response...</span>
+                </div>
+              ) : isRecordingMic ? (
+                <div className="pill-status green">
+                  <div className="status-dot-pulse" style={{ width: 6, height: 6 }} />
+                  <span>Listening (Hands-Free Mic Active)</span>
                 </div>
               ) : (
                 <div className="pill-status green">
@@ -224,10 +224,10 @@ export default function LiveInterview({
             </div>
           )}
 
-          {isRecordingMic && (
+          {isRecordingMic && !isAlexSpeaking && (
             <div className="mic-streaming-ribbon">
               <div className="pulse-record-dot" />
-              <span>Microphone streaming live (16kHz PCM)... Click mic or Send to submit your answer.</span>
+              <span>Hands-Free Mic Active (16kHz Live) — Just speak naturally, Alex is listening.</span>
             </div>
           )}
 

@@ -145,10 +145,15 @@ export class InterviewWebSocket {
 
   async startMicrophone() {
     try {
-      this.stopAudioPlayback(); // Barge-in: stop Alex audio immediately
       this.initAudio();
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1 }
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
       this.mediaStream = stream;
 
@@ -168,8 +173,13 @@ export class InterviewWebSocket {
       };
 
       micSource.connect(processor);
-      processor.connect(micCtx.destination);
-      this.audioProcessor = { micCtx, micSource, processor };
+      // Route through a zero-gain node so processor fires continuously without echoing to speakers
+      const muteGain = micCtx.createGain();
+      muteGain.gain.value = 0;
+      processor.connect(muteGain);
+      muteGain.connect(micCtx.destination);
+
+      this.audioProcessor = { micCtx, micSource, processor, muteGain };
       return true;
     } catch (err) {
       console.warn("Microphone access error:", err);
