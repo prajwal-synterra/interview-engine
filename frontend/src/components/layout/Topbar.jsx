@@ -3,6 +3,7 @@ import { Play, Pause, Square, Bell, ChevronDown } from 'lucide-react';
 
 export default function Topbar({
   sessionId,
+  candidateName = 'Candidate',
   isWsConnected,
   duration,
   isInterviewRunning,
@@ -11,6 +12,10 @@ export default function Topbar({
   onPause,
   onEnd
 }) {
+  const initials = candidateName && candidateName.length >= 2 
+    ? candidateName.substring(0, 2).toUpperCase() 
+    : (candidateName ? candidateName[0].toUpperCase() : 'CD');
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -54,10 +59,10 @@ export default function Topbar({
         </button>
 
         <div className="user-profile-badge">
-          <div className="user-avatar">PG</div>
+          <div className="user-avatar">{initials}</div>
           <div>
-            <div className="user-meta-name">Prajwal</div>
-            <div className="user-meta-role">Developer</div>
+            <div className="user-meta-name">{candidateName || 'Candidate'}</div>
+            <div className="user-meta-role">Candidate</div>
           </div>
           <ChevronDown size={14} color="var(--muted)" />
         </div>

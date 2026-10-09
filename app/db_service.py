@@ -287,40 +287,37 @@ class DatabaseService:
         self,
         session_id: str,
         intro_blueprint: Dict,
-        detected_ecosystem: Optional[str] = None
+        detected_ecosystem: Optional[str] = None,
+        candidate_name: Optional[str] = None
     ) -> bool:
-        """Updates the session blueprint after candidate intro vector matching."""
+        """Updates the session blueprint and candidate name after candidate intro vector matching."""
         blueprint_json = json.dumps(intro_blueprint)
 
         if not self.is_sqlite:
+            set_clauses = ["intro_blueprint = %s::jsonb"]
+            params = [blueprint_json]
             if detected_ecosystem:
-                query = """
-                    UPDATE interview_sessions
-                    SET intro_blueprint = %s::jsonb, detected_ecosystem = %s
-                    WHERE session_id = %s;
-                """
-                await asyncio.to_thread(self._sync_pg_execute, query, (blueprint_json, detected_ecosystem, session_id))
-            else:
-                query = """
-                    UPDATE interview_sessions
-                    SET intro_blueprint = %s::jsonb
-                    WHERE session_id = %s;
-                """
-                await asyncio.to_thread(self._sync_pg_execute, query, (blueprint_json, session_id))
+                set_clauses.append("detected_ecosystem = %s")
+                params.append(detected_ecosystem)
+            if candidate_name:
+                set_clauses.append("candidate_name = %s")
+                params.append(candidate_name)
+            params.append(session_id)
+            query = f"UPDATE interview_sessions SET {', '.join(set_clauses)} WHERE session_id = %s;"
+            await asyncio.to_thread(self._sync_pg_execute, query, tuple(params))
         else:
             async with aiosqlite.connect(SQLITE_DB_PATH) as db:
+                set_clauses = ["intro_blueprint = ?"]
+                params = [blueprint_json]
                 if detected_ecosystem:
-                    await db.execute("""
-                        UPDATE interview_sessions
-                        SET intro_blueprint = ?, detected_ecosystem = ?
-                        WHERE session_id = ?;
-                    """, (blueprint_json, detected_ecosystem, session_id))
-                else:
-                    await db.execute("""
-                        UPDATE interview_sessions
-                        SET intro_blueprint = ?
-                        WHERE session_id = ?;
-                    """, (blueprint_json, session_id))
+                    set_clauses.append("detected_ecosystem = ?")
+                    params.append(detected_ecosystem)
+                if candidate_name:
+                    set_clauses.append("candidate_name = ?")
+                    params.append(candidate_name)
+                params.append(session_id)
+                query = f"UPDATE interview_sessions SET {', '.join(set_clauses)} WHERE session_id = ?;"
+                await db.execute(query, tuple(params))
                 await db.commit()
 
         return True

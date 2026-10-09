@@ -11,7 +11,9 @@ import {
   Shield,
   Layers,
   Activity,
-  Cpu
+  Cpu,
+  Volume2,
+  Zap
 } from 'lucide-react';
 
 export default function LiveInterview({
@@ -25,7 +27,9 @@ export default function LiveInterview({
   pipelineStatus,
   telemetry,
   debugLogs,
-  isAlexSpeaking
+  isAlexSpeaking,
+  candidateName = 'Candidate',
+  isInterrupted = false
 }) {
   const [inputText, setInputText] = useState('');
   const [activeDebugTab, setActiveDebugTab] = useState('system');
@@ -92,7 +96,7 @@ export default function LiveInterview({
         <div className="dashboard-card">
           <div className="alex-interviewer-header">
             <div className="alex-profile">
-              <div className="alex-avatar-circle">
+              <div className={`alex-avatar-circle ${isAlexSpeaking ? 'speaking' : ''}`}>
                 <Bot size={24} />
               </div>
               <div>
@@ -102,7 +106,17 @@ export default function LiveInterview({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="audio-waveform-container">
+              <div
+                className={`audio-waveform-container ${
+                  isAlexSpeaking
+                    ? 'alex-speaking'
+                    : isRecordingMic
+                    ? 'candidate-speaking'
+                    : pipelineStatus.shadowEval === 'active'
+                    ? 'evaluating'
+                    : 'idle'
+                }`}
+              >
                 <div className="wave-bar" />
                 <div className="wave-bar" />
                 <div className="wave-bar" />
@@ -112,10 +126,33 @@ export default function LiveInterview({
                 <div className="wave-bar" />
                 <div className="wave-bar" />
               </div>
-              <div className="pill-status green">
-                <div className="status-dot-pulse" style={{ width: 6, height: 6 }} />
-                <span>{isAlexSpeaking ? 'Speaking...' : 'Listening...'}</span>
-              </div>
+
+              {isInterrupted ? (
+                <div className="pill-status amber">
+                  <Zap size={13} />
+                  <span>Alex Listening</span>
+                </div>
+              ) : isRecordingMic ? (
+                <div className="pill-status red">
+                  <div className="status-dot-pulse red" style={{ width: 6, height: 6 }} />
+                  <span>{candidateName || 'Candidate'} Speaking...</span>
+                </div>
+              ) : isAlexSpeaking ? (
+                <div className="pill-status blue">
+                  <Volume2 size={13} />
+                  <span>Alex Speaking...</span>
+                </div>
+              ) : pipelineStatus.shadowEval === 'active' ? (
+                <div className="pill-status purple">
+                  <Sparkles size={13} />
+                  <span>Evaluating Response...</span>
+                </div>
+              ) : (
+                <div className="pill-status green">
+                  <div className="status-dot-pulse" style={{ width: 6, height: 6 }} />
+                  <span>Alex Listening...</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -138,7 +175,11 @@ export default function LiveInterview({
               } else if (item.type === 'candidate') {
                 return (
                   <div key={idx} className="bubble-candidate">
-                    <div className="bubble-candidate-title">You (Candidate)</div>
+                    <div className="bubble-candidate-title">
+                      {candidateName && candidateName !== 'Candidate'
+                        ? `You (${candidateName})`
+                        : 'You (Candidate)'}
+                    </div>
                     <div className="bubble-text">{item.text}</div>
                     <div className="bubble-timestamp">{item.time}</div>
                   </div>
@@ -175,6 +216,21 @@ export default function LiveInterview({
             })}
           </div>
 
+          {/* Live Streaming or Interruption Status Ribbons */}
+          {isInterrupted && (
+            <div className="interruption-alert-ribbon">
+              <Zap size={14} />
+              <span>Barge-in detected: Alex paused and stopped speaking to listen to you.</span>
+            </div>
+          )}
+
+          {isRecordingMic && (
+            <div className="mic-streaming-ribbon">
+              <div className="pulse-record-dot" />
+              <span>Microphone streaming live (16kHz PCM)... Click mic or Send to submit your answer.</span>
+            </div>
+          )}
+
           {/* Candidate Input Bar */}
           <form className="candidate-input-bar" onSubmit={handleSend}>
             <button
@@ -188,7 +244,7 @@ export default function LiveInterview({
             <input
               type="text"
               className="candidate-text-input"
-              placeholder="Type a test message..."
+              placeholder={isRecordingMic ? 'Speaking via microphone...' : 'Type your engineering response or thoughts...'}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
             />

@@ -15,6 +15,7 @@ export class InterviewWebSocket {
     this.nextPlayTime = 0;
     this.mediaStream = null;
     this.audioProcessor = null;
+    this.activeSources = [];
   }
 
   initAudio() {
@@ -27,6 +28,22 @@ export class InterviewWebSocket {
     if (this.audioCtx && this.audioCtx.state === "suspended") {
       this.audioCtx.resume();
     }
+  }
+
+  stopAudioPlayback() {
+    if (this.activeSources && this.activeSources.length > 0) {
+      this.activeSources.forEach((src) => {
+        try {
+          src.stop();
+          src.disconnect();
+        } catch {}
+      });
+      this.activeSources = [];
+    }
+    if (this.audioCtx) {
+      this.nextPlayTime = this.audioCtx.currentTime;
+    }
+    this.onAudioPlayState(false);
   }
 
   playPCMChunk(arrayBuffer) {
@@ -56,9 +73,11 @@ export class InterviewWebSocket {
       }
       source.start(this.nextPlayTime);
       this.nextPlayTime += buffer.duration;
+      this.activeSources.push(source);
       this.onAudioPlayState(true);
 
       source.onended = () => {
+        this.activeSources = this.activeSources.filter((s) => s !== source);
         if (this.audioCtx && this.audioCtx.currentTime >= this.nextPlayTime - 0.05) {
           this.onAudioPlayState(false);
         }
@@ -98,6 +117,9 @@ export class InterviewWebSocket {
         if (typeof event.data === "string") {
           try {
             const data = JSON.parse(event.data);
+            if (data.event === "ai_interrupted") {
+              this.stopAudioPlayback();
+            }
             this.onMessage(data);
           } catch {
             this.onMessage({ event: "raw_text", text: event.data });
@@ -123,6 +145,7 @@ export class InterviewWebSocket {
 
   async startMicrophone() {
     try {
+      this.stopAudioPlayback(); // Barge-in: stop Alex audio immediately
       this.initAudio();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { sampleRate: 16000, channelCount: 1 }
@@ -182,6 +205,7 @@ export class InterviewWebSocket {
   }
 
   sendCandidateText(text) {
+    this.stopAudioPlayback(); // Barge-in: cut off Alex's audio playback immediately
     this.sendJson({
       action: "candidate_text",
       transcript: text

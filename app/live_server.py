@@ -106,25 +106,69 @@ def get_system_prompt_for_level(level: str) -> str:
         return base + "\nCandidate Level: MID-LEVEL PROFESSIONAL. Probe practical system design, caching strategies, API protocols, and concurrency."
 
 
-def check_for_offtopic_candidate_prompts(text: str) -> str:
-    """Detects evasive candidate questions or prompt injection attempts."""
-    text_lower = text.lower()
-    offtopic_patterns = [
-        r"which is (?:stronger|better|faster|more powerful)",
-        r"(?:truck|lorry|car|bus|tiger|lion).*(?:stronger|faster|better)",
-        r"tell me a joke",
-        r"what is the weather",
-        r"answer my question",
-        r"ignore (?:all )?previous instructions",
+def extract_candidate_name_from_intro(text: str) -> Optional[str]:
+    """Extracts candidate's first name if they mention it during their self-introduction."""
+    text_clean = text.strip()
+    patterns = [
+        r"(?:my name is|my name's|i am|i'm|this is|call me|myself)\s+([A-Za-z]+)",
+        r"^(?:hi|hello|hey)?[,\s]+(?:i'm|im|i am)\s+([A-Za-z]+)",
+        r"^([A-Za-z]+)\s+here\b",
+        r"(?:you can call me)\s+([A-Za-z]+)",
+        r"(?:this side)\s+([A-Za-z]+)",
     ]
-    for pat in offtopic_patterns:
-        if re.search(pat, text_lower):
-            return (
-                "[URGENT DEFLECTION DIRECTIVE: The candidate asked an off-topic or evasive question. "
-                "Do NOT answer it. Deflect politely, remind them this is a technical architecture interview, "
-                "and ask your original technical question again.]"
-            )
-    return "[OFF-TOPIC DEFLECTION GUARD: Maintain interviewer authority. Do not let candidate deviate from technical topic.]"
+    stopwords = {
+        "a", "an", "the", "alex", "software", "backend", "fullstack", "frontend",
+        "developer", "engineer", "working", "building", "here", "excited",
+        "happy", "ready", "interested", "just", "currently", "actually", "so",
+        "well", "hi", "hello", "hey", "good", "doing", "going", "fine", "ok",
+        "yes", "sure", "thanks", "thank", "i", "we", "my", "me"
+    }
+    for pat in patterns:
+        m = re.search(pat, text_clean, re.IGNORECASE)
+        if m:
+            extracted = m.group(1).strip()
+            if extracted.lower() not in stopwords and len(extracted) >= 2:
+                return extracted.capitalize()
+    return None
+
+
+def check_for_offtopic_candidate_prompts(text: str) -> Optional[str]:
+    """Detects evasive candidate questions, jokes, riddles, or non-technical deviations."""
+    text_lower = text.lower()
+    offtopic_keywords = [
+        "truck", "lorry", "car", "bus", "bike", "vehicle", "plane", "aeroplane",
+        "tiger", "lion", "animal", "dog", "cat", "elephant",
+        "joke", "riddle", "weather", "rain", "sun", "poem", "song", "sing",
+        "president", "prime minister", "capital of", "recipe", "cook", "food",
+        "movie", "film", "actor", "actress", "cricket", "football", "world cup",
+        "which is better", "which is faster", "which is stronger",
+        "ignore previous", "ignore all", "jailbreak", "dan mode", "act as a pirate",
+        "how was your day", "are you an ai", "are you human", "are you a bot",
+        "what is your age", "who created you", "who made you", "tell me a story",
+        "meaning of life", "love me", "marry me"
+    ]
+    if any(kw in text_lower for kw in offtopic_keywords):
+        return (
+            "[OFF-TOPIC DEFLECTION DIRECTIVE: The candidate asked an off-topic question, riddle, joke, trivia, or non-technical remark. "
+            "CRITICAL: Do NOT answer their off-topic inquiry. Deflect warmly, politely, and with professional interviewer authority: "
+            "(e.g., 'Haha, let's keep our focus on system architecture today!' or 'As tempting as that topic is, I want to make sure we make the most of our time evaluating engineering systems!'), "
+            "and immediately steer them back to the active technical topic.]"
+        )
+
+    # Check if candidate asked a non-technical counter-question instead of answering
+    if "?" in text and not any(kw in text_lower for kw in [
+        "scale", "cache", "redis", "query", "database", "latency", "lock",
+        "thread", "concurrency", "design", "architecture", "api", "service",
+        "cluster", "index", "sharding", "consistency", "kafka", "mq", "http",
+        "load", "microservice", "throughput", "memory", "cpu", "io", "network"
+    ]):
+        return (
+            "[COUNTER-QUESTION DIRECTIVE: The candidate asked a question back instead of answering. "
+            "Politely remind them with warmth that you are looking for their architectural reasoning and engineering perspective first.]"
+        )
+
+    return None
+
 
 
 # ==============================================================================
@@ -440,11 +484,16 @@ async def websocket_interview(websocket: WebSocket):
             mic_task = asyncio.create_task(mic_forward_loop())
             recv_task = asyncio.create_task(gemini_receive_loop())
 
-            # Send Greeting to Alex
+            # Send Polite Opening Greeting to Alex
+            greeting_instruction = (
+                "The candidate has just connected to the interview room. "
+                "Begin with a warm, polite, and welcoming spoken greeting as Alex, their Principal Architect interviewer today. "
+                "Introduce yourself as Alex, ask what name they prefer to go by, and invite them to introduce themselves "
+                "and share their technical background, the languages and frameworks they work with, and what engineering systems they have built recently. "
+                "Keep your spoken opening to 2-3 concise, natural sentences. Speak conversationally and never use Markdown, bullet points, asterisks, or code blocks in speech."
+            )
             await session.send_client_content(
-                turns=[types.Content(role="user", parts=[types.Part.from_text(
-                    text=f"The candidate has entered the room. Greet {candidate_name} by name and invite them to share their engineering background."
-                )])]
+                turns=[types.Content(role="user", parts=[types.Part.from_text(text=greeting_instruction)])]
             )
             await websocket.send_json({"event": "ai_turn_start"})
 
@@ -623,6 +672,9 @@ async def websocket_interview(websocket: WebSocket):
                     raw_text = data.get("transcript") or data.get("text") or candidate_transcript_buffer
                     candidate_transcript_buffer = ""
 
+                    # Ensure any in-flight Alex audio in browser is stopped upon candidate speech
+                    await websocket.send_json({"event": "ai_interrupted"})
+
                     user_text = clean_candidate_transcript(raw_text)
                     if not user_text or len(user_text.strip()) < 3:
                         continue
@@ -632,7 +684,33 @@ async def websocket_interview(websocket: WebSocket):
 
                     # ── Phase 1: INTRO ──
                     if session_phase == "INTRO":
+                        offtopic = check_for_offtopic_candidate_prompts(user_text)
+                        if offtopic:
+                            log_event("INTRO_OFFTOPIC", "Candidate asked off-topic question during intro.")
+                            prompt_payload = (
+                                f"The candidate said: '{user_text}'.\n"
+                                f"{offtopic}\n"
+                                f"Do NOT answer their off-topic inquiry. As Alex, warmly and politely deflect: "
+                                f"remind them that you are conducting their technical interview today, and ask them what name they go by, "
+                                f"along with a brief introduction of their technical stack and engineering systems they have built. "
+                                f"Keep your spoken response natural and conversational (2 sentences max)."
+                            )
+                            await session.send_client_content(
+                                turns=[types.Content(role="user", parts=[types.Part.from_text(text=prompt_payload)])]
+                            )
+                            await websocket.send_json({"event": "ai_turn_start"})
+                            continue
+
                         log_event("INTRO_PROCESSING", "Processing candidate introduction.")
+
+                        # Extract name if mentioned by candidate in introduction
+                        extracted_name = extract_candidate_name_from_intro(user_text)
+                        if extracted_name:
+                            candidate_name = extracted_name
+                            ACTIVE_SESSIONS[session_id]["candidate_name"] = candidate_name
+                            log_event("NAME_IDENTIFIED", f"Identified candidate name: {candidate_name}")
+                            await websocket.send_json({"event": "candidate_name_updated", "name": candidate_name})
+
                         vector_res = await match_candidate_topics(user_text)
                         matched_pillars = vector_res.get("matched_pillars", [])
 
@@ -655,11 +733,13 @@ async def websocket_interview(websocket: WebSocket):
                             session_id=session_id,
                             intro_blueprint={
                                 "intro_text": user_text,
+                                "candidate_name": candidate_name,
                                 "matched_pillars": matched_pillars,
                                 "pillar_ecosystem_map": pillar_ecosystem_map,
                                 "ecosystem_summary": ecosystem_summary
                             },
-                            detected_ecosystem=ecosystem_summary.get("primary_ecosystem", "GENERAL_SYSTEMS")
+                            detected_ecosystem=ecosystem_summary.get("primary_ecosystem", "GENERAL_SYSTEMS"),
+                            candidate_name=candidate_name
                         )
 
                         session_phase = "DEEP_DIVE"
@@ -667,9 +747,11 @@ async def websocket_interview(websocket: WebSocket):
 
                         prompt_payload = (
                             f"The candidate introduced themselves as: '{user_text}'.\n"
-                            f"Acknowledge their background warmly. Transition seamlessly into their first technical topic: {active_topic}.\n"
+                            f"Politely address them by their name '{candidate_name}'. "
+                            f"Acknowledge their background and transition smoothly into their first technical topic: {active_topic}.\n"
                             f"{eco_dir}\n"
-                            "Ask an engaging open-ended architectural question to kick off the deep dive."
+                            f"Ask an engaging open-ended architectural question on {active_topic} to kick off the deep dive. "
+                            f"Keep your spoken response to 2-3 natural sentences. Do not use Markdown formatting, asterisks, or code blocks in speech."
                         )
 
                     # ── Phase 2: DEEP_DIVE ──
@@ -678,15 +760,17 @@ async def websocket_interview(websocket: WebSocket):
                         alex_latest_question = ""
                         asyncio.create_task(run_shadow_pipeline(user_text, question_asked))
 
-                        offtopic_guard = check_for_offtopic_candidate_prompts(user_text)
+                        offtopic_guard = check_for_offtopic_candidate_prompts(user_text) or ""
                         eco_dir = get_ecosystem_directive(active_topic, pillar_ecosystem_map)
 
                         prompt_payload = (
-                            f"The candidate answered: '{user_text}'.\n"
+                            f"The candidate {candidate_name} answered: '{user_text}'.\n"
                             f"{offtopic_guard}\n"
                             f"[ACTIVE TOPIC: {active_topic}]\n"
                             f"{eco_dir}\n"
-                            "Respond Socratically as Alex the interviewer. Drill into edge cases or system trade-offs."
+                            f"Respond Socratically as Alex the interviewer, addressing {candidate_name} naturally when appropriate. "
+                            f"If they asked an off-topic question, joke, or riddle, do NOT answer it—deflect politely with professional warmth and bring {candidate_name} back to {active_topic}. "
+                            f"Keep your spoken response concise (2-3 sentences max). Never use Markdown or bullet points."
                         )
 
                     # ── Phase 3: WRAPPING_UP ──

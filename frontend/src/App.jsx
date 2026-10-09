@@ -19,6 +19,7 @@ export default function App() {
 
   // Session State
   const [sessionId, setSessionId] = useState('sess_2025_09_30_1745_001');
+  const [candidateName, setCandidateName] = useState('Candidate');
   const [isWsConnected, setIsWsConnected] = useState(false);
   const [wsLatency, setWsLatency] = useState('—');
   const [isInterviewRunning, setIsInterviewRunning] = useState(false);
@@ -26,6 +27,7 @@ export default function App() {
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [isAlexSpeaking, setIsAlexSpeaking] = useState(false);
   const [isRecordingMic, setIsRecordingMic] = useState(false);
+  const [isInterrupted, setIsInterrupted] = useState(false);
 
   // Dialogue Thread
   const [conversationHistory, setConversationHistory] = useState([
@@ -82,6 +84,22 @@ export default function App() {
       setActivityTimeline((prev) => [
         ...prev,
         { time: timeStr, text: `Session started (${msg.session_id})` }
+      ]);
+    } else if (msg.event === 'candidate_name_updated') {
+      if (msg.name) {
+        setCandidateName(msg.name);
+        setActivityTimeline((prev) => [
+          ...prev,
+          { time: timeStr, text: `Candidate identified as: ${msg.name}` }
+        ]);
+      }
+    } else if (msg.event === 'ai_interrupted') {
+      setIsAlexSpeaking(false);
+      setIsInterrupted(true);
+      setTimeout(() => setIsInterrupted(false), 2500);
+      setActivityTimeline((prev) => [
+        ...prev,
+        { time: timeStr, text: 'Alex paused (candidate interrupted) — listening' }
       ]);
     } else if (msg.event === 'ai_turn_start') {
       setIsAlexSpeaking(true);
@@ -287,7 +305,7 @@ export default function App() {
       { time: '00:00', text: 'Connecting to Alex (Gemini Live)...' }
     ]);
     if (wsClientRef.current) {
-      wsClientRef.current.connect('Alex Vance', 'HARD');
+      wsClientRef.current.connect('', 'HARD');
     }
   };
 
@@ -320,6 +338,7 @@ export default function App() {
       <div className="main-wrapper">
         <Topbar
           sessionId={sessionId}
+          candidateName={candidateName}
           isWsConnected={isWsConnected}
           duration={formatDuration(durationSeconds)}
           isInterviewRunning={isInterviewRunning}
@@ -343,6 +362,8 @@ export default function App() {
               telemetry={telemetry}
               debugLogs={debugLogs}
               isAlexSpeaking={isAlexSpeaking}
+              candidateName={candidateName}
+              isInterrupted={isInterrupted}
             />
           )}
 

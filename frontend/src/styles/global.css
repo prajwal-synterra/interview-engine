@@ -279,6 +279,24 @@ body {
   border: 1px solid var(--orange-border);
 }
 
+.pill-status.blue {
+  background-color: var(--blue-light);
+  color: var(--blue);
+  border: 1px solid var(--blue-border);
+}
+
+.pill-status.amber {
+  background-color: #FEF3C7;
+  color: #D97706;
+  border: 1px solid #FCD34D;
+}
+
+.pill-status.purple {
+  background-color: var(--purple-light);
+  color: var(--purple);
+  border: 1px solid var(--purple-border);
+}
+
 .duration-clock {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -460,9 +478,34 @@ body {
 
 .wave-bar {
   width: 3px;
-  background-color: var(--blue);
   border-radius: 3px;
-  animation: waveAnimation 1s ease-in-out infinite alternate;
+  transition: all 0.2s ease;
+}
+
+/* Idle State: minimal resting bars */
+.audio-waveform-container.idle .wave-bar {
+  background-color: var(--border-strong);
+  height: 6px;
+  opacity: 0.5;
+  animation: none;
+}
+
+/* Alex Speaking State: vibrant blue active wave */
+.audio-waveform-container.alex-speaking .wave-bar {
+  background-color: var(--blue);
+  animation: waveAnimation 0.8s ease-in-out infinite alternate;
+}
+
+/* Candidate Speaking State: vibrant red/coral active wave */
+.audio-waveform-container.candidate-speaking .wave-bar {
+  background-color: var(--red);
+  animation: waveAnimation 0.6s ease-in-out infinite alternate;
+}
+
+/* Evaluating State: purple wave */
+.audio-waveform-container.evaluating .wave-bar {
+  background-color: var(--purple);
+  animation: waveAnimation 1.2s ease-in-out infinite alternate;
 }
 
 .wave-bar:nth-child(2) { animation-delay: 0.1s; height: 12px; }
@@ -474,8 +517,62 @@ body {
 .wave-bar:nth-child(8) { animation-delay: 0.25s; height: 10px; }
 
 @keyframes waveAnimation {
-  0% { transform: scaleY(0.4); opacity: 0.6; }
-  100% { transform: scaleY(1.2); opacity: 1; }
+  0% { transform: scaleY(0.35); opacity: 0.5; }
+  100% { transform: scaleY(1.25); opacity: 1; }
+}
+
+.alex-avatar-circle.speaking {
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.4);
+  animation: avatarPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes avatarPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3); }
+  50% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.55); }
+  100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3); }
+}
+
+.mic-streaming-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-md);
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.pulse-record-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+  animation: pulseRecord 1s infinite;
+}
+
+@keyframes pulseRecord {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.interruption-alert-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #FEF3C7;
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius-md);
+  color: #B45309;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
 }
 
 /* ── Dialogue Transcript Area ── */
