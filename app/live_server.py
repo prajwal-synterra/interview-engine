@@ -412,7 +412,8 @@ async def websocket_interview(websocket: WebSocket):
         )
     )
 
-    alex_latest_question = "Welcome the candidate warmly and ask them to introduce their technical background."
+    alex_latest_question = ""
+    last_alex_question = "Introduce your technical background and systems you have built recently."
     alex_finish_timestamp = None
 
     try:
@@ -450,60 +451,67 @@ async def websocket_interview(websocket: WebSocket):
 
             # ── Loop 2: Gemini Receive Loop (Gemini Live -> Browser) ──
             async def gemini_receive_loop():
-                nonlocal alex_latest_question, alex_finish_timestamp, candidate_transcript_buffer, is_alex_speaking
+                nonlocal alex_latest_question, last_alex_question, alex_finish_timestamp, candidate_transcript_buffer, is_alex_speaking
                 try:
-                    async for response in session.receive():
-                        sc = response.server_content
-                        if not sc:
-                            continue
+                    while True:
+                        turn_had_content = False
+                        async for response in session.receive():
+                            turn_had_content = True
+                            sc = response.server_content
+                            if not sc:
+                                continue
 
-                        # 1. Handle Candidate Speech Transcription from Gemini Live
-                        if sc.input_transcription and sc.input_transcription.text:
-                            tx = sc.input_transcription.text
-                            candidate_transcript_buffer += tx
-                            await websocket.send_json({"event": "candidate_transcript_chunk", "text": tx})
+                            # 1. Handle Candidate Speech Transcription from Gemini Live
+                            if sc.input_transcription and sc.input_transcription.text:
+                                tx = sc.input_transcription.text
+                                candidate_transcript_buffer += tx
+                                await websocket.send_json({"event": "candidate_transcript_chunk", "text": tx})
 
-                        # 2. Handle Alex Spoken Response Audio
-                        if sc.model_turn:
-                            is_alex_speaking = True
-                            for part in sc.model_turn.parts:
-                                if part.inline_data and part.inline_data.data:
-                                    # Forward raw PCM audio bytes to browser
-                                    await websocket.send_bytes(part.inline_data.data)
-                                if part.text:
-                                    alex_latest_question += part.text
-                                    await websocket.send_json({"event": "ai_transcript_chunk", "text": part.text})
+                            # 2. Handle Alex Spoken Response Audio
+                            if sc.model_turn:
+                                is_alex_speaking = True
+                                for part in sc.model_turn.parts:
+                                    if part.inline_data and part.inline_data.data:
+                                        # Forward raw PCM audio bytes to browser
+                                        await websocket.send_bytes(part.inline_data.data)
+                                    if part.text:
+                                        alex_latest_question += part.text
+                                        await websocket.send_json({"event": "ai_transcript_chunk", "text": part.text})
 
-                        # 3. Handle Alex Spoken Response Transcription (real-time words from Gemini Live voice)
-                        if sc.output_transcription and sc.output_transcription.text:
-                            is_alex_speaking = True
-                            tx = sc.output_transcription.text
-                            alex_latest_question += tx
-                            await websocket.send_json({"event": "ai_transcript_chunk", "text": tx})
+                            # 3. Handle Alex Spoken Response Transcription (real-time words from Gemini Live voice)
+                            if sc.output_transcription and sc.output_transcription.text:
+                                is_alex_speaking = True
+                                tx = sc.output_transcription.text
+                                alex_latest_question += tx
+                                await websocket.send_json({"event": "ai_transcript_chunk", "text": tx})
 
-                        # 4. Finalize candidate turn when Alex starts speaking/responding
-                        if (sc.output_transcription or sc.model_turn) and candidate_transcript_buffer.strip():
-                            prev_speech = clean_candidate_transcript(candidate_transcript_buffer)
-                            candidate_transcript_buffer = ""
-                            if prev_speech and len(prev_speech) >= 3:
-                                asyncio.create_task(process_candidate_speech_turn(prev_speech))
+                            # 4. Finalize candidate turn when Alex starts speaking/responding
+                            if (sc.output_transcription or sc.model_turn) and candidate_transcript_buffer.strip():
+                                prev_speech = clean_candidate_transcript(candidate_transcript_buffer)
+                                candidate_transcript_buffer = ""
+                                if prev_speech and len(prev_speech) >= 3:
+                                    asyncio.create_task(process_candidate_speech_turn(prev_speech))
 
-                        # 5. Handle Interruption
-                        if sc.interrupted:
-                            log_event("GEMINI_LIVE", "Alex was interrupted by candidate speech.")
-                            is_alex_speaking = False
-                            await websocket.send_json({"event": "ai_interrupted"})
+                            # 5. Handle Interruption
+                            if sc.interrupted:
+                                log_event("GEMINI_LIVE", "Alex was interrupted by candidate speech.")
+                                is_alex_speaking = False
+                                await websocket.send_json({"event": "ai_interrupted"})
 
-                        # 6. Handle Turn Completion
-                        if sc.turn_complete:
-                            is_alex_speaking = False
-                            alex_finish_timestamp = time.time()
-                            alex_turn_complete_event.set()
-                            full_alex_speech = alex_latest_question.strip()
-                            if full_alex_speech:
-                                log_speech("Alex", full_alex_speech)
-                            await websocket.send_json({"event": "turn_complete", "text": full_alex_speech})
-                            alex_latest_question = ""
+                            # 6. Handle Turn Completion
+                            if sc.turn_complete:
+                                is_alex_speaking = False
+                                alex_finish_timestamp = time.time()
+                                alex_turn_complete_event.set()
+                                full_alex_speech = alex_latest_question.strip()
+                                if full_alex_speech:
+                                    log_speech("Alex", full_alex_speech)
+                                await websocket.send_json({"event": "turn_complete", "text": full_alex_speech})
+                                last_alex_question = full_alex_speech
+                                alex_latest_question = ""
+
+                        if not turn_had_content:
+                            await asyncio.sleep(0.05)
 
                 except asyncio.CancelledError:
                     pass
@@ -736,7 +744,7 @@ async def websocket_interview(websocket: WebSocket):
                     elif session_phase == "DEEP_DIVE":
                         # Launch Shadow Evaluator asynchronously in the background (~1.5s)
                         # Does NOT pause or block voice communication!
-                        q_asked = alex_latest_question or "Active architectural question."
+                        q_asked = last_alex_question or alex_latest_question or "Active architectural question."
                         asyncio.create_task(run_shadow_pipeline(speech_text, q_asked))
 
                 except Exception as e:

@@ -25,7 +25,7 @@ except ImportError:
 TABLE_NAME = "CompetencyPillars"
 INDEX_NAME = "PillarVectorIndex"
 EMBEDDING_DIM = 768
-DYNOXIDE_URL = os.getenv("DYNOXIDE_URL", "http://localhost:8000")
+DYNOXIDE_URL = os.getenv("DYNOXIDE_URL", "")
 # Initialize GenAI Client
 _gemini_client = None
 evaluator_api_key = os.getenv("EVALUATOR_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -36,7 +36,7 @@ if genai and evaluator_api_key:
         print(f"[VectorService] Gemini client warning: {e}")
 # Initialize DynamoDB Client (Dynoxide)
 _db_client = None
-if boto3:
+if boto3 and DYNOXIDE_URL:
     try:
         _db_client = boto3.client(
             "dynamodb",
