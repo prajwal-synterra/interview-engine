@@ -763,11 +763,17 @@ async def websocket_interview(websocket: WebSocket):
                         log_event("INTERVIEW_FINISH", "Candidate triggered finish interview.")
                         break
 
-                    # Candidate Finished Speaking via manual text submit
+                    elif ev == "candidate_interrupted":
+                        log_event("BARGE_IN", "Candidate interrupted Alex — pausing Alex's speech.")
+                        await websocket.send_json({"event": "ai_interrupted"})
+                        continue
+
+                    # Candidate Finished Speaking (either via silence detector auto-submit or manual text submit)
                     raw_text = data.get("transcript") or data.get("text")
                     if raw_text and raw_text.strip():
                         user_text = clean_candidate_transcript(raw_text)
                         if user_text and len(user_text.strip()) >= 3:
+                            log_event("TURN_AUTO_SUBMIT", f"Candidate turn processed ({ev}): '{user_text[:60]}...'")
                             # Stop in-flight audio if playing
                             await websocket.send_json({"event": "ai_interrupted"})
 
@@ -783,7 +789,8 @@ async def websocket_interview(websocket: WebSocket):
                                 f"Respond Socratically as Alex the interviewer in natural spoken English (2-3 sentences max). Never use Markdown or bullets."
                             )
                             await session.send_client_content(
-                                turns=[types.Content(role="user", parts=[types.Part.from_text(text=prompt_payload)])]
+                                turns=[types.Content(role="user", parts=[types.Part.from_text(text=prompt_payload)])],
+                                turn_complete=True
                             )
                             await websocket.send_json({"event": "ai_turn_start"})
 

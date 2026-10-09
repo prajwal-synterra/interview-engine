@@ -160,6 +160,15 @@ export default function App() {
       const finalText = msg.text || '';
       setConversationHistory((prev) => {
         const last = prev[prev.length - 1];
+        const secondLast = prev[prev.length - 2];
+        if (last && last.type === 'shadow_eval' && secondLast && secondLast.type === 'candidate') {
+          // Already finalized by client silence detector, update candidate text if needed
+          return [
+            ...prev.slice(0, -2),
+            { ...secondLast, text: finalText || secondLast.text, isStreaming: false },
+            last
+          ];
+        }
         if (last && last.type === 'candidate') {
           return [
             ...prev.slice(0, -1),
@@ -299,7 +308,36 @@ export default function App() {
         });
       },
       onCandidateSpeechFinal: (text) => {
-        // Speech turn finalized by browser speech recognition
+        if (!text || !text.trim()) return;
+        const timeStr = formatDuration(durationSecondsRef.current);
+        setConversationHistory((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.type === 'candidate') {
+            return [
+              ...prev.slice(0, -1),
+              { ...last, text: text, isStreaming: false },
+              { type: 'shadow_eval', progress: '65%', time: timeStr }
+            ];
+          } else {
+            return [
+              ...prev,
+              { type: 'candidate', text: text, time: timeStr, isStreaming: false },
+              { type: 'shadow_eval', progress: '65%', time: timeStr }
+            ];
+          }
+        });
+        setPipelineStatus({
+          candidateResponse: 'done',
+          shadowEval: 'active',
+          bkt: 'pending',
+          mirt: 'pending',
+          policy: 'pending'
+        });
+        setActivityTimeline((prev) => [
+          ...prev,
+          { time: timeStr, text: 'Candidate finished speaking (silence detected)' },
+          { time: timeStr, text: 'Shadow Evaluator grading in background...' }
+        ]);
       },
       onMessage: (msg) => {
         handleIncomingWsMessage(msg);

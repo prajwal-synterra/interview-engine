@@ -48,6 +48,63 @@ export class InterviewWebSocket {
     this.activeSources = [];
     this.speechRecognition = null;
     this.micChunksSent = 0;
+
+    // Silence detection & conversational state
+    this.currentCandidateTranscript = "";
+    this.silenceTimer = null;
+    this.silenceThresholdMs = 1500; // 1.5 seconds of silence -> auto-submit speech turn
+    this.isAlexSpeaking = false;
+  }
+
+  handleSpeechActivity(text) {
+    if (!text || !text.trim()) return;
+    this.currentCandidateTranscript = text.trim();
+
+    // Stream live text to UI for real-time visual feedback
+    this.onCandidateSpeechChunk(this.currentCandidateTranscript, false);
+
+    // Reset silence countdown timer
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+    }
+
+    // When candidate stops talking for 1.5 seconds, auto-submit the turn!
+    this.silenceTimer = setTimeout(() => {
+      this.autoSubmitCandidateTurn();
+    }, this.silenceThresholdMs);
+  }
+
+  autoSubmitCandidateTurn() {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+
+    const transcriptToSubmit = (this.currentCandidateTranscript || "").trim();
+    if (!transcriptToSubmit || transcriptToSubmit.length < 3) {
+      return;
+    }
+
+    console.log("[SilenceDetector] Auto-submitting candidate speech turn:", transcriptToSubmit);
+
+    // 1. Seal candidate bubble in UI
+    this.onCandidateSpeechFinal(transcriptToSubmit);
+
+    // 2. Clear current candidate transcript buffer for the next turn
+    this.currentCandidateTranscript = "";
+
+    // 3. Send over WebSocket to live_server.py so Alex immediately replies
+    this.sendJson({
+      action: "candidate_speech_finished",
+      transcript: transcriptToSubmit
+    });
+
+    // 4. Recycle speech recognition instance so next turn accumulates cleanly
+    if (this.speechRecognition) {
+      try {
+        this.speechRecognition.stop();
+      } catch {}
+    }
   }
 
   async initAudio() {
@@ -79,6 +136,7 @@ export class InterviewWebSocket {
     if (this.audioCtx) {
       this.nextPlayTime = this.audioCtx.currentTime;
     }
+    this.isAlexSpeaking = false;
     this.onAudioPlayState(false);
   }
 
@@ -110,11 +168,13 @@ export class InterviewWebSocket {
       source.start(this.nextPlayTime);
       this.nextPlayTime += buffer.duration;
       this.activeSources.push(source);
+      this.isAlexSpeaking = true;
       this.onAudioPlayState(true);
 
       source.onended = () => {
         this.activeSources = this.activeSources.filter((s) => s !== source);
         if (this.audioCtx && this.audioCtx.currentTime >= this.nextPlayTime - 0.05) {
+          this.isAlexSpeaking = false;
           this.onAudioPlayState(false);
         }
       };
@@ -206,6 +266,21 @@ export class InterviewWebSocket {
       processor.onaudioprocess = (e) => {
         if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
         const inputData = e.inputBuffer.getChannelData(0);
+
+        // Calculate audio RMS energy for candidate speech activity & barge-in
+        let sumSquares = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sumSquares += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sumSquares / inputData.length);
+
+        // Barge-in: If candidate starts speaking over Alex
+        if (rms > 0.035 && this.isAlexSpeaking) {
+          console.log("[BargeIn] Candidate interrupted Alex (RMS:", rms.toFixed(4), ")");
+          this.stopAudioPlayback();
+          this.sendJson({ event: "candidate_interrupted" });
+        }
+
         // Correctly downsample to 16kHz for Gemini Live multimodal voice input
         const downsampled = downsampleTo16k(inputData, micCtx.sampleRate);
         const pcm16 = new Int16Array(downsampled.length);
@@ -226,7 +301,7 @@ export class InterviewWebSocket {
 
       this.audioProcessor = { micCtx, micSource, processor, muteGain };
 
-      // Start Web Speech API in browser for instant real-time live chat captioning
+      // Start Web Speech API in browser for instant real-time live chat captioning & silence detection
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (SpeechRec) {
         try {
@@ -236,21 +311,20 @@ export class InterviewWebSocket {
           rec.lang = "en-US";
 
           rec.onresult = (evt) => {
-            let interim = "";
-            let final = "";
-            for (let i = evt.resultIndex; i < evt.results.length; ++i) {
+            // If Alex is speaking, candidate speaking triggers barge-in
+            if (this.isAlexSpeaking) {
+              this.stopAudioPlayback();
+              this.sendJson({ event: "candidate_interrupted" });
+            }
+
+            let fullTurnTranscript = "";
+            for (let i = 0; i < evt.results.length; ++i) {
               const res = evt.results[i];
-              if (res.isFinal) {
-                final += res[0].transcript;
-              } else {
-                interim += res[0].transcript;
-              }
+              fullTurnTranscript += (fullTurnTranscript ? " " : "") + res[0].transcript;
             }
-            if (interim) {
-              this.onCandidateSpeechChunk(interim.trim(), false);
-            }
-            if (final) {
-              this.onCandidateSpeechFinal(final.trim());
+
+            if (fullTurnTranscript.trim()) {
+              this.handleSpeechActivity(fullTurnTranscript.trim());
             }
           };
 
@@ -259,10 +333,17 @@ export class InterviewWebSocket {
           };
 
           rec.onend = () => {
+            // Automatically resume continuous listening for candidate's next speech turn
             if (this.mediaStream && this.speechRecognition) {
               try {
                 this.speechRecognition.start();
-              } catch {}
+              } catch {
+                setTimeout(() => {
+                  if (this.mediaStream && this.speechRecognition) {
+                    try { this.speechRecognition.start(); } catch {}
+                  }
+                }, 100);
+              }
             }
           };
 
@@ -315,11 +396,19 @@ export class InterviewWebSocket {
   }
 
   sendCandidateText(text) {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    this.currentCandidateTranscript = "";
     this.stopAudioPlayback(); // Barge-in: cut off Alex's audio playback immediately
     this.sendJson({
       action: "candidate_text",
       transcript: text
     });
+    if (this.speechRecognition) {
+      try { this.speechRecognition.stop(); } catch {}
+    }
   }
 
   pause() {
